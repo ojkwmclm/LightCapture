@@ -1,0 +1,39 @@
+{
+  "checks": [
+    "PNG export",
+    "JPEG export",
+    "opaque redaction pixels",
+    "undo",
+    "redo",
+    "zoom preserves export dimensions",
+    "Vision OCR",
+    "annotation hit testing",
+    "object move",
+    "arrow endpoint editing",
+    "four shape resize types",
+    "selection excluded from export",
+    "style editing",
+    "delete and undo/redo",
+    "pen text step movement",
+    "right click/drag/release cancel without capture",
+    "left drag confirms region",
+    "Escape cancels region",
+    "multi-display capture coordinates",
+    "window right-click cancellation",
+    "left click confirms selected window",
+    "frontmost window hit testing",
+    "window selected area retains nonzero alpha",
+    "region selected area retains nonzero alpha",
+    "empty and text clipboard rejected without replacing image",
+    "PNG and TIFF clipboard import preserves pixel dimensions",
+    "clipboard import opens editor and hides quick bar",
+    "clipboard tests do not modify system clipboard"
+  ],
+  "png_dimensions": [
+    1600,
+    1000
+  ],
+  "status": "PASS",
+  "release_version": "0.6.21",
+  "build": "40"
+}

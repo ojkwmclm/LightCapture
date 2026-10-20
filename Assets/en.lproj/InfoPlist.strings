@@ -1,0 +1,3 @@
+"CFBundleDisplayName" = "LightCapture";
+"NSMicrophoneUsageDescription" = "Capture microphone audio only when you select it for recording, and save it in the local video file.";
+"NSScreenCaptureUsageDescription" = "Capture screenshots and screen recordings that you initiate.";

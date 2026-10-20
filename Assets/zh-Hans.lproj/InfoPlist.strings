@@ -1,0 +1,3 @@
+"CFBundleDisplayName" = "轻截 LightCapture";
+"NSMicrophoneUsageDescription" = "仅在你选择麦克风录屏时采集麦克风声音，并保存在本机录屏文件中。";
+"NSScreenCaptureUsageDescription" = "用于你主动发起的截图和录屏。";

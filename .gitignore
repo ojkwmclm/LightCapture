@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+._*
+# Generated builds and test output
+*.app/
+*.zip
+*.dmg
+.build/
+module-cache/
+selftest*.png
+selftest*.json
+*.log
