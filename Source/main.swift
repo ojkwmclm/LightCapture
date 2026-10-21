@@ -15,6 +15,26 @@ final class CaptureToolButton: NSButton {
     override func mouseExited(with event:NSEvent){layer?.backgroundColor=NSColor.clear.cgColor}
 }
 
+enum PanelPlacement {
+    static let key="quickCaptureWindowOrigin"
+    static func save(_ origin:NSPoint,defaults:UserDefaults = .standard){
+        guard origin.x.isFinite && origin.y.isFinite else{return}
+        defaults.set(["x":Double(origin.x),"y":Double(origin.y)],forKey:key)
+    }
+    static func restore(size:NSSize,screens:[NSRect],fallback:NSPoint,defaults:UserDefaults = .standard)->NSPoint {
+        guard let saved=defaults.dictionary(forKey:key),let x=saved["x"] as? Double,let y=saved["y"] as? Double,x.isFinite,y.isFinite else{return constrain(fallback,size:size,screens:screens)}
+        return constrain(NSPoint(x:x,y:y),size:size,screens:screens)
+    }
+    static func constrain(_ origin:NSPoint,size:NSSize,screens:[NSRect])->NSPoint {
+        guard !screens.isEmpty else{return origin}
+        let frame=NSRect(origin:origin,size:size)
+        func area(_ r:NSRect)->CGFloat {let hit=r.intersection(frame);return hit.isNull ? 0:hit.width*hit.height}
+        func distance(_ r:NSRect)->CGFloat {pow(r.midX-frame.midX,2)+pow(r.midY-frame.midY,2)}
+        let screen=screens.min {a,b in area(a)==area(b) ? distance(a)<distance(b):area(a)>area(b)}!
+        return NSPoint(x:min(max(origin.x,screen.minX),max(screen.minX,screen.maxX-size.width)),y:min(max(origin.y,screen.minY),max(screen.minY,screen.maxY-size.height)))
+    }
+}
+
 final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation {
     var editorColor:NSColorWell?
     var editorWidth:NSSegmentedControl?
@@ -33,6 +53,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
     var clipboardButton:NSButton?
     var editorPasteButton:NSButton?
     var clipboardTimer:Timer?
+    var screenObserver:NSObjectProtocol?
     var clipboardChangeCount = -1
     var clipboardContainsImage=false
     var editorScroll: EditorScrollView!
@@ -48,6 +69,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
     func applicationDidFinishLaunching(_ note:Notification) {
         NSApp.setActivationPolicy(.regular);if let url=Bundle.main.url(forResource:"LightCapture",withExtension:"icns"),let icon=NSImage(contentsOf:url){NSApp.applicationIconImage=icon};buildMenus();buildWindow();buildPanel();buildStatus();registerHotkeys()
         startClipboardMonitoring()
+        screenObserver=NotificationCenter.default.addObserver(forName:NSApplication.didChangeScreenParametersNotification,object:nil,queue:.main){[weak self] _ in self?.keepPanelOnScreen()}
         showPanel();NSApp.activate(ignoringOtherApps:true)
         if let index=CommandLine.arguments.firstIndex(of:"--open"),CommandLine.arguments.count>index+1 {load(URL(fileURLWithPath:CommandLine.arguments[index+1]));showEditor()}
         if CommandLine.arguments.contains("--self-test") {selfTest()}
@@ -162,7 +184,9 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
             content.wantsLayer=true;content.layer?.backgroundColor=NSColor.windowBackgroundColor.cgColor;content.addSubview(row)
             NSLayoutConstraint.activate([row.leadingAnchor.constraint(equalTo:content.leadingAnchor,constant:6),row.trailingAnchor.constraint(equalTo:content.trailingAnchor,constant:-6),row.topAnchor.constraint(equalTo:content.topAnchor,constant:4),row.bottomAnchor.constraint(equalTo:content.bottomAnchor,constant:-4)])
         }
-        panel.setFrameOrigin(NSPoint(x:80,y:(NSScreen.main?.visibleFrame.maxY ?? 800)-100))
+        let fallback=NSPoint(x:(NSScreen.main?.visibleFrame.minX ?? 0)+80,y:(NSScreen.main?.visibleFrame.maxY ?? 800)-100)
+        panel.setFrameOrigin(PanelPlacement.restore(size:panel.frame.size,screens:NSScreen.screens.map(\.visibleFrame),fallback:fallback))
+        panel.delegate=self
     }
     func buildStatus() {status=NSStatusBar.system.statusItem(withLength:NSStatusItem.variableLength);status.button?.image=NSImage(systemSymbolName:"viewfinder",accessibilityDescription:L("轻截"));let m=NSMenu();m.addItem(menuItem(L("区域截图   ⌥⌘2"),#selector(region)));m.addItem(menuItem(L("窗口截图   ⌥⌘4"),#selector(captureWindow)));m.addItem(menuItem(L("全屏截图   ⌥⌘3"),#selector(full)));m.addItem(.separator());m.addItem(menuItem(L("显示编辑器"),#selector(showEditor)));m.addItem(menuItem(L("显示浮动栏"),#selector(showPanel)));m.addItem(menuItem(L("开始／停止录屏"),#selector(toggleRecording)));m.addItem(.separator());m.addItem(menuItem(L("退出"),#selector(quit)));status.menu=m}
     func registerHotkeys() {
@@ -295,7 +319,17 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         }
         window.makeKeyAndOrderFront(nil);NSApp.activate(ignoringOtherApps:true)
     }
-    @objc func showPanel(){panel.orderFrontRegardless()}
+    func keepPanelOnScreen(){
+        guard let panel else{return}
+        let origin=PanelPlacement.constrain(panel.frame.origin,size:panel.frame.size,screens:NSScreen.screens.map(\.visibleFrame))
+        if origin != panel.frame.origin {panel.setFrameOrigin(origin)}
+    }
+    func windowDidMove(_ notification:Notification){
+        guard let moved=notification.object as? NSWindow,moved === panel else{return}
+        PanelPlacement.save(moved.frame.origin)
+    }
+    func applicationWillTerminate(_ notification:Notification){if let panel {PanelPlacement.save(panel.frame.origin)}}
+    @objc func showPanel(){keepPanelOnScreen();panel.orderFrontRegardless()}
     func windowShouldClose(_ sender:NSWindow)->Bool {if sender === window {panel.orderFrontRegardless()};return true}
     @objc func quit(){if recording {message(L("请先停止录制"),L("录屏保存完成后即可退出。"));return};NSApp.terminate(nil)}
     @objc func about(){
@@ -307,7 +341,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         let icon=NSImageView();icon.image=NSApp.applicationIconImage;icon.imageScaling = .scaleProportionallyUpOrDown;icon.setAccessibilityLabel(L("轻截"))
         NSLayoutConstraint.activate([icon.widthAnchor.constraint(equalToConstant:64),icon.heightAnchor.constraint(equalToConstant:64)])
         root.addArrangedSubview(icon)
-        let title=NSTextField(labelWithString:L("轻截 LightCapture 0.6.21"));title.font = .systemFont(ofSize:15,weight:.bold)
+        let title=NSTextField(labelWithString:L("轻截 LightCapture 0.6.22"));title.font = .systemFont(ofSize:15,weight:.bold)
         let text=NSTextField(wrappingLabelWithString:L("区域／窗口／全屏：⌥⌘2／4／3\n图片复制：⇧⌘C；保存：⌘S\n截图与录屏需在系统设置中允许屏幕录制。"));text.font = .systemFont(ofSize:13);text.preferredMaxLayoutWidth=292
         root.addArrangedSubview(title);root.addArrangedSubview(text)
         let ok=NSButton(title:L("好"),target:self,action:#selector(dismissAbout));ok.bezelStyle = .rounded;ok.keyEquivalent="\r";root.addArrangedSubview(ok)
@@ -430,7 +464,23 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         assert(importImage(from:pb));assert(canvas.image?.size==NSSize(width:32,height:24))
         pb.clearContents();assert(!importImage(from:pb));assert(canvas.image?.size==NSSize(width:32,height:24))
     }
-    func selfTest(){DispatchQueue.main.asyncAfter(deadline:.now()+0.4){self.testEditableObjects();self.testRegionCancellation();self.testWindowCancellation();self.testSelectionMouseSurface();self.testClipboardImport();let image=NSImage(size:NSSize(width:800,height:500));image.lockFocusFlipped(true);NSColor.white.setFill();NSRect(x:0,y:0,width:800,height:500).fill();"LightCapture 轻截".draw(at:NSPoint(x:60,y:50),withAttributes:[.font:NSFont.systemFont(ofSize:40),.foregroundColor:NSColor.black]);NSColor.systemBlue.setFill();NSRect(x:80,y:180,width:240,height:130).fill();image.unlockFocus();self.canvas.setImage(self.normalized(image)!);self.canvas.checkpoint();self.canvas.marks=[Mark(tool:.arrow,points:[NSPoint(x:500,y:120),NSPoint(x:310,y:230)],color:.systemRed,width:5),Mark(tool:.redact,points:[NSPoint(x:440,y:300),NSPoint(x:650,y:350)],color:.black,width:4),Mark(tool:.text,points:[NSPoint(x:400,y:380)],color:.systemRed,width:4,text:"本机处理 / Local only")];let path=ProcessInfo.processInfo.environment["LIGHTCAPTURE_TEST_OUTPUT"] ?? "/tmp/lightcapture-selftest.png";try? self.canvas.imageData()?.write(to:URL(fileURLWithPath:path));self.canvas.undoEdit();assert(self.canvas.marks.isEmpty);self.canvas.redoEdit();assert(self.canvas.marks.count==3);self.statusLabel.stringValue="自检通过：绘制、导出、撤销、重做";let data=self.canvas.imageData()!
+    func testPanelPlacement(){
+        let suite="LightCapture.PanelPlacementTest."+UUID().uuidString
+        let prefs=UserDefaults(suiteName:suite)!;defer{prefs.removePersistentDomain(forName:suite)}
+        let screen=NSRect(x:0,y:0,width:1440,height:900),size=NSSize(width:260,height:56),position=NSPoint(x:520,y:420)
+        let fallback=NSPoint(x:80,y:800)
+        assert(PanelPlacement.restore(size:size,screens:[screen],fallback:fallback,defaults:prefs)==fallback)
+        PanelPlacement.save(position,defaults:prefs)
+        let reopened=UserDefaults(suiteName:suite)!
+        assert(PanelPlacement.restore(size:size,screens:[screen],fallback:fallback,defaults:reopened)==position)
+        PanelPlacement.save(NSPoint(x:2200,y:1200),defaults:prefs)
+        assert(PanelPlacement.restore(size:size,screens:[screen],fallback:fallback,defaults:prefs)==NSPoint(x:1180,y:844))
+        let left=NSRect(x:-1440,y:0,width:1440,height:900)
+        assert(PanelPlacement.constrain(NSPoint(x:-800,y:300),size:size,screens:[left,screen])==NSPoint(x:-800,y:300))
+        prefs.set(["x":"invalid","y":2],forKey:PanelPlacement.key)
+        assert(PanelPlacement.restore(size:size,screens:[screen],fallback:fallback,defaults:prefs)==fallback)
+    }
+    func selfTest(){DispatchQueue.main.asyncAfter(deadline:.now()+0.4){self.testEditableObjects();self.testRegionCancellation();self.testWindowCancellation();self.testSelectionMouseSurface();self.testClipboardImport();self.testPanelPlacement();let image=NSImage(size:NSSize(width:800,height:500));image.lockFocusFlipped(true);NSColor.white.setFill();NSRect(x:0,y:0,width:800,height:500).fill();"LightCapture 轻截".draw(at:NSPoint(x:60,y:50),withAttributes:[.font:NSFont.systemFont(ofSize:40),.foregroundColor:NSColor.black]);NSColor.systemBlue.setFill();NSRect(x:80,y:180,width:240,height:130).fill();image.unlockFocus();self.canvas.setImage(self.normalized(image)!);self.canvas.checkpoint();self.canvas.marks=[Mark(tool:.arrow,points:[NSPoint(x:500,y:120),NSPoint(x:310,y:230)],color:.systemRed,width:5),Mark(tool:.redact,points:[NSPoint(x:440,y:300),NSPoint(x:650,y:350)],color:.black,width:4),Mark(tool:.text,points:[NSPoint(x:400,y:380)],color:.systemRed,width:4,text:"本机处理 / Local only")];let path=ProcessInfo.processInfo.environment["LIGHTCAPTURE_TEST_OUTPUT"] ?? "/tmp/lightcapture-selftest.png";try? self.canvas.imageData()?.write(to:URL(fileURLWithPath:path));self.canvas.undoEdit();assert(self.canvas.marks.isEmpty);self.canvas.redoEdit();assert(self.canvas.marks.count==3);self.statusLabel.stringValue="自检通过：绘制、导出、撤销、重做";let data=self.canvas.imageData()!
         let bitmap=NSBitmapImageRep(data:data)!
         assert(bitmap.pixelsWide==Int(self.canvas.image!.size.width))
         let black=bitmap.colorAt(x:450,y:320)!.usingColorSpace(.deviceRGB)!
@@ -446,7 +496,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         try? VNImageRequestHandler(cgImage:bitmap.cgImage!).perform([request])
         let recognized=request.results?.compactMap{$0.topCandidates(1).first?.string}.joined(separator:"\n") ?? ""
         assert(recognized.contains("LightCapture"))
-        let result:[String:Any]=["status":"PASS","png_dimensions":[bitmap.pixelsWide,bitmap.pixelsHigh],"checks":["PNG export","JPEG export","opaque redaction pixels","undo","redo","zoom preserves export dimensions","Vision OCR","annotation hit testing","object move","arrow endpoint editing","four shape resize types","selection excluded from export","style editing","delete and undo/redo","pen text step movement","right click/drag/release cancel without capture","left drag confirms region","Escape cancels region","multi-display capture coordinates","window right-click cancellation","left click confirms selected window","frontmost window hit testing","window selected area retains nonzero alpha","region selected area retains nonzero alpha","empty and text clipboard rejected without replacing image","PNG and TIFF clipboard import preserves pixel dimensions","clipboard import opens editor and hides quick bar","clipboard tests do not modify system clipboard"],"ocr":recognized]
+        let result:[String:Any]=["status":"PASS","png_dimensions":[bitmap.pixelsWide,bitmap.pixelsHigh],"checks":["PNG export","JPEG export","opaque redaction pixels","undo","redo","zoom preserves export dimensions","Vision OCR","annotation hit testing","object move","arrow endpoint editing","four shape resize types","selection excluded from export","style editing","delete and undo/redo","pen text step movement","right click/drag/release cancel without capture","left drag confirms region","Escape cancels region","multi-display capture coordinates","window right-click cancellation","left click confirms selected window","frontmost window hit testing","window selected area retains nonzero alpha","region selected area retains nonzero alpha","empty and text clipboard rejected without replacing image","PNG and TIFF clipboard import preserves pixel dimensions","clipboard import opens editor and hides quick bar","clipboard tests do not modify system clipboard","quick panel position persists across defaults instances","offscreen panel is constrained to a visible display","negative-coordinate display placement","invalid position falls back safely"],"quick_panel_origin":[self.panel.frame.minX,self.panel.frame.minY],"ocr":recognized]
         let report=try! JSONSerialization.data(withJSONObject:result,options:[.prettyPrinted,.sortedKeys])
         try! report.write(to:URL(fileURLWithPath:path+".json"))
         if CommandLine.arguments.contains("--test-exit") {NSApp.terminate(nil)}}}

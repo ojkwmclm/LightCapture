@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.6.22 (local build)
+
+- Save the quick capture toolbar position when moved and restore it on launch.
+- Keep the toolbar visible when a display is disconnected or its layout changes.
+
 ## v0.6.21
 
 Initial public release of the existing Mac app.
