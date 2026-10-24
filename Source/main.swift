@@ -47,6 +47,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
     var hotkeys:[EventHotKeyRef?]=[]
     var recorder=Recorder()
     var recording=false
+    var scrollCapture:ScrollingCaptureController?
     var capturing=false
     var recordButton:NSButton!
     var quickRecordButton:NSButton!
@@ -101,14 +102,15 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         root.submenu=menu;return root
     }
     func validateMenuItem(_ item:NSMenuItem)->Bool {
+        if capturing {return item.action == #selector(scrollingCapture) || item.action == #selector(quit)}
         if item.action == #selector(importClipboardImage) {refreshClipboardAvailability();return clipboardContainsImage && !capturing && !recordingBusy && NSApp.modalWindow == nil}
         return item.action == #selector(changeLanguage(_:)) ? (!recording && !recordingBusy && NSApp.modalWindow == nil):true
     }
     @objc func changeLanguage(_ sender:NSMenuItem) {
-        guard !recording && !recordingBusy && NSApp.modalWindow == nil else{return}
+        guard !capturing && !recording && !recordingBusy && NSApp.modalWindow == nil else{return}
         let language=UILanguage.allCases[sender.tag]
         guard language != Localizer.selection else{return}
-        let translatedName=["图片","屏幕截图","拼接图片","剪贴板图片"].first {L($0)==documentName}
+        let translatedName=["图片","屏幕截图","拼接图片","剪贴板图片","滚动截图"].first {L($0)==documentName}
         let editorVisible=window.isVisible, quickVisible=panel.isVisible
         let oldWindow=window!, oldPanel=panel!
         let editorFrame=window.frame, quickOrigin=panel.frame.origin
@@ -129,7 +131,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
     }
     func buildMenus() {
         let bar=NSMenu();let appItem=NSMenuItem();let appMenu=NSMenu();appMenu.addItem(menuItem(L("关于轻截"),#selector(about)));appMenu.addItem(languageMenuItem());appMenu.addItem(.separator());appMenu.addItem(menuItem(L("退出轻截"),#selector(quit),"q"));appItem.submenu=appMenu;bar.addItem(appItem)
-        let file=NSMenuItem(title:L("文件"),action:nil,keyEquivalent:"");let fm=NSMenu();fm.addItem(menuItem(L("打开图片…"),#selector(openImage),"o"));fm.addItem(menuItem(L("从剪贴板导入"),#selector(importClipboardImage),"v",mods:[.command,.option]));fm.addItem(menuItem(L("保存图片…"),#selector(saveImage),"s"));fm.addItem(menuItem(L("区域截图"),#selector(region),"2",mods:[.command,.option]));fm.addItem(menuItem(L("全屏截图"),#selector(full),"3",mods:[.command,.option]));fm.addItem(menuItem(L("窗口截图"),#selector(captureWindow),"4",mods:[.command,.option]));fm.addItem(.separator());fm.addItem(menuItem(L("开始／停止录屏"),#selector(toggleRecording)));file.submenu=fm;bar.addItem(file)
+        let file=NSMenuItem(title:L("文件"),action:nil,keyEquivalent:"");let fm=NSMenu();fm.addItem(menuItem(L("打开图片…"),#selector(openImage),"o"));fm.addItem(menuItem(L("从剪贴板导入"),#selector(importClipboardImage),"v",mods:[.command,.option]));fm.addItem(menuItem(L("保存图片…"),#selector(saveImage),"s"));fm.addItem(menuItem(L("区域截图"),#selector(region),"2",mods:[.command,.option]));fm.addItem(menuItem(L("全屏截图"),#selector(full),"3",mods:[.command,.option]));fm.addItem(menuItem(L("窗口截图"),#selector(captureWindow),"4",mods:[.command,.option]));fm.addItem(menuItem(L("滚动截图"),#selector(scrollingCapture)));fm.addItem(.separator());fm.addItem(menuItem(L("开始／停止录屏"),#selector(toggleRecording)));file.submenu=fm;bar.addItem(file)
         let edit=NSMenuItem(title:L("编辑"),action:nil,keyEquivalent:"");let em=NSMenu();em.addItem(menuItem(L("撤销标注"),#selector(undoEdit),"z"));em.addItem(menuItem(L("重做标注"),#selector(redoEdit),"z",mods:[.command,.shift]));let copy=NSMenuItem(title:L("复制"),action:#selector(NSText.copy(_:)),keyEquivalent:"c");em.addItem(copy);let paste=NSMenuItem(title:L("粘贴"),action:#selector(NSText.paste(_:)),keyEquivalent:"v");em.addItem(paste);let all=NSMenuItem(title:L("全选"),action:#selector(NSText.selectAll(_:)),keyEquivalent:"a");em.addItem(all);em.addItem(menuItem(L("复制标注图片"),#selector(copyImage),"c",mods:[.command,.shift]));edit.submenu=em;bar.addItem(edit);NSApp.mainMenu=bar
     }
     func fullScreenCaptureIcon()->NSImage {
@@ -171,13 +173,13 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         let more=NSPopUpButton(frame:.zero,pullsDown:true);more.bezelStyle = .regularSquare;more.isBordered=false;more.imagePosition = .imageOnly
         more.addItem(withTitle:L("更多"));more.item(at:0)?.image=NSImage(systemSymbolName:"gearshape",accessibilityDescription:L("更多工具"))?.withSymbolConfiguration(.init(pointSize:16,weight:.regular))
         more.setAccessibilityLabel(L("更多工具"));more.toolTip=L("更多工具与设置")
-        let menu=more.menu!;menu.addItem(menuItem(L("拼接长图…"),#selector(combine)));menu.addItem(languageMenuItem());menu.addItem(.separator());menu.addItem(menuItem(L("关于轻截"),#selector(about)));menu.addItem(menuItem(L("退出轻截"),#selector(quit)))
+        let menu=more.menu!;menu.addItem(menuItem(L("滚动截图"),#selector(scrollingCapture)));menu.addItem(menuItem(L("拼接长图…"),#selector(combine)));menu.addItem(languageMenuItem());menu.addItem(.separator());menu.addItem(menuItem(L("关于轻截"),#selector(about)));menu.addItem(menuItem(L("退出轻截"),#selector(quit)))
         NSLayoutConstraint.activate([more.widthAnchor.constraint(equalToConstant:30),more.heightAnchor.constraint(equalToConstant:26)])
         let editorButton=tool(L("编辑器"),#selector(showEditor),"square.and.pencil",L("打开图片编辑器"))
         let settingsDivider=separator()
         clipboardButton=tool(L("从剪贴板导入"),#selector(importClipboardImage),"clipboard",L("从剪贴板导入 · ⌥⌘V"))
         refreshClipboardAvailability(force:true)
-        let row=NSStackView(views:[clipboardButton!,tool(L("窗口截图"),#selector(captureWindow),"macwindow",L("窗口截图 · ⌥⌘4")),tool(L("区域截图"),#selector(region),"rectangle.dashed",L("矩形区域截图 · ⌥⌘2")),tool(L("全屏截图"),#selector(full),"arrow.up.left.and.arrow.down.right",L("全屏截图 · ⌥⌘3")),separator(),quickRecordButton!,separator(),tool(L("打开图片"),#selector(openImage),"folder",L("打开图片 · ⌘O")),editorButton,settingsDivider,more])
+        let row=NSStackView(views:[clipboardButton!,tool(L("窗口截图"),#selector(captureWindow),"macwindow",L("窗口截图 · ⌥⌘4")),tool(L("区域截图"),#selector(region),"rectangle.dashed",L("矩形区域截图 · ⌥⌘2")),tool(L("全屏截图"),#selector(full),"arrow.up.left.and.arrow.down.right",L("全屏截图 · ⌥⌘3")),tool(L("滚动截图"),#selector(scrollingCapture),"arrow.down.square",L("滚动截图")),separator(),quickRecordButton!,separator(),tool(L("打开图片"),#selector(openImage),"folder",L("打开图片 · ⌘O")),editorButton,settingsDivider,more])
         row.spacing=2;row.setCustomSpacing(1,after:editorButton);row.setCustomSpacing(9,after:settingsDivider);row.alignment = .centerY
         panel.setContentSize(NSSize(width:ceil(row.fittingSize.width)+12,height:34));row.translatesAutoresizingMaskIntoConstraints=false
         if let content=panel.contentView {
@@ -188,7 +190,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         panel.setFrameOrigin(PanelPlacement.restore(size:panel.frame.size,screens:NSScreen.screens.map(\.visibleFrame),fallback:fallback))
         panel.delegate=self
     }
-    func buildStatus() {status=NSStatusBar.system.statusItem(withLength:NSStatusItem.variableLength);status.button?.image=NSImage(systemSymbolName:"viewfinder",accessibilityDescription:L("轻截"));let m=NSMenu();m.addItem(menuItem(L("区域截图   ⌥⌘2"),#selector(region)));m.addItem(menuItem(L("窗口截图   ⌥⌘4"),#selector(captureWindow)));m.addItem(menuItem(L("全屏截图   ⌥⌘3"),#selector(full)));m.addItem(.separator());m.addItem(menuItem(L("显示编辑器"),#selector(showEditor)));m.addItem(menuItem(L("显示浮动栏"),#selector(showPanel)));m.addItem(menuItem(L("开始／停止录屏"),#selector(toggleRecording)));m.addItem(.separator());m.addItem(menuItem(L("退出"),#selector(quit)));status.menu=m}
+    func buildStatus() {status=NSStatusBar.system.statusItem(withLength:NSStatusItem.variableLength);status.button?.image=NSImage(systemSymbolName:"viewfinder",accessibilityDescription:L("轻截"));let m=NSMenu();m.addItem(menuItem(L("区域截图   ⌥⌘2"),#selector(region)));m.addItem(menuItem(L("窗口截图   ⌥⌘4"),#selector(captureWindow)));m.addItem(menuItem(L("全屏截图   ⌥⌘3"),#selector(full)));m.addItem(menuItem(L("滚动截图／完成"),#selector(scrollingCapture)));m.addItem(.separator());m.addItem(menuItem(L("显示编辑器"),#selector(showEditor)));m.addItem(menuItem(L("显示浮动栏"),#selector(showPanel)));m.addItem(menuItem(L("开始／停止录屏"),#selector(toggleRecording)));m.addItem(.separator());m.addItem(menuItem(L("退出"),#selector(quit)));status.menu=m}
     func registerHotkeys() {
         var type=EventTypeSpec(eventClass:OSType(kEventClassKeyboard),eventKind:UInt32(kEventHotKeyPressed))
         InstallEventHandler(GetApplicationEventTarget(),{_,event,context in
@@ -247,6 +249,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         _=importImage(from:.general)
     }
     @objc func openImage() {
+        guard !capturing else{return}
         let restoreQuick=panel.isVisible
         let targetScreen=(restoreQuick ? panel.screen:window.screen) ?? NSScreen.main
         panel.orderOut(nil)
@@ -281,8 +284,9 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         do{try VNImageRequestHandler(cgImage:image).perform([request]);let text=request.results?.compactMap{$0.topCandidates(1).first?.string}.joined(separator:"\n") ?? "";DispatchQueue.main.async{self.showText(text)}}catch{DispatchQueue.main.async{self.error(error)}}}}
     func showText(_ text:String) {let alert=NSAlert();alert.messageText=L("识别结果");alert.informativeText=L("可选中编辑，点击「复制文字」放入剪贴板。");let scroll=NSScrollView(frame:NSRect(x:0,y:0,width:540,height:300));scroll.hasVerticalScroller=true;let v=NSTextView(frame:scroll.bounds);v.isEditable=true;v.font = .systemFont(ofSize:15);v.string=text;scroll.documentView=v;alert.accessoryView=scroll;alert.addButton(withTitle:L("复制文字"));alert.addButton(withTitle:L("关闭"));if alert.runModal() == .alertFirstButtonReturn {NSPasteboard.general.clearContents();NSPasteboard.general.setString(v.string,forType:.string)};statusLabel.stringValue=text.isEmpty ? L("未识别到文字"):L("文字识别完成")}
     @objc func pin(){guard let image=canvas.renderedImage() else{return};let scale=min(600/image.size.width,500/image.size.height,1);let w=NSWindow(contentRect:NSRect(x:140,y:160,width:image.size.width*scale,height:image.size.height*scale),styleMask:[.titled,.closable,.resizable],backing:.buffered,defer:false);w.title=L("轻截 · 参考贴图");w.level = .floating;w.collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary];w.isReleasedWhenClosed=false;let v=NSImageView();v.image=image;v.imageScaling = .scaleProportionallyUpOrDown;w.contentView=v;w.makeKeyAndOrderFront(nil);pins.append(w)}
-    @objc func combine(){let p=NSOpenPanel();p.allowedContentTypes=[.image];p.allowsMultipleSelection=true;p.message=L("按文件名顺序纵向拼接；请选择至少两张图片。");guard p.runModal() == .OK,p.urls.count>1 else{return};let images=p.urls.sorted{$0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending}.compactMap{NSImage(contentsOf:$0)}.compactMap{normalized($0)};guard images.count==p.urls.count else{message(L("拼接失败"),L("部分文件无法读取。"));return};let width=images.map{$0.size.width}.max() ?? 1,height=images.reduce(CGFloat(0)){$0+$1.size.height};guard width*height<80_000_000 else{message(L("图片过大"),L("拼接总像素需小于 8000 万，请先缩小图片。"));return};let result=NSImage(size:NSSize(width:width,height:height));result.lockFocusFlipped(true);NSColor.white.setFill();NSRect(x:0,y:0,width:width,height:height).fill();var y:CGFloat=0;for image in images{image.draw(in:NSRect(x:0,y:y,width:image.size.width,height:image.size.height),from:.zero,operation:.sourceOver,fraction:1,respectFlipped:true,hints:nil);y+=image.size.height};result.unlockFocus();if let normalized=normalized(result){documentName=L("拼接图片");canvas.setImage(normalized)};statusLabel.stringValue=LF("已按文件名顺序拼接 %@ 张图片（保留重叠区域）",images.count)}
+    @objc func combine(){guard !capturing else{return};let p=NSOpenPanel();p.allowedContentTypes=[.image];p.allowsMultipleSelection=true;p.message=L("按文件名顺序纵向拼接；请选择至少两张图片。");guard p.runModal() == .OK,p.urls.count>1 else{return};let images=p.urls.sorted{$0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending}.compactMap{NSImage(contentsOf:$0)}.compactMap{normalized($0)};guard images.count==p.urls.count else{message(L("拼接失败"),L("部分文件无法读取。"));return};let width=images.map{$0.size.width}.max() ?? 1,height=images.reduce(CGFloat(0)){$0+$1.size.height};guard width*height<80_000_000 else{message(L("图片过大"),L("拼接总像素需小于 8000 万，请先缩小图片。"));return};let result=NSImage(size:NSSize(width:width,height:height));result.lockFocusFlipped(true);NSColor.white.setFill();NSRect(x:0,y:0,width:width,height:height).fill();var y:CGFloat=0;for image in images{image.draw(in:NSRect(x:0,y:y,width:image.size.width,height:image.size.height),from:.zero,operation:.sourceOver,fraction:1,respectFlipped:true,hints:nil);y+=image.size.height};result.unlockFocus();if let normalized=normalized(result){documentName=L("拼接图片");canvas.setImage(normalized)};statusLabel.stringValue=LF("已按文件名顺序拼接 %@ 张图片（保留重叠区域）",images.count)}
     @objc func toggleRecording(){
+        guard !capturing else{return}
         guard !recordingBusy else{return}
         if recording {setRecordingBusy(true);Task { @MainActor in do{try await recorder.stop()}catch{self.error(error);self.resetRecording()}};return}
         setRecordingBusy(true)
@@ -309,6 +313,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
     func setRecordingBusy(_ busy:Bool){recordingBusy=busy;recordButton.isEnabled = !busy;quickRecordButton.isEnabled = !busy}
     func resetRecording(){recording=false;recordButton.title=L("录屏");recordButton.toolTip=L("屏幕录制");quickRecordButton.title="";quickRecordButton.setAccessibilityLabel(L("屏幕录制"));quickRecordButton.toolTip=L("屏幕录制");quickRecordButton.image=NSImage(systemSymbolName:"record.circle",accessibilityDescription:L("录屏设置"));quickRecordButton.contentTintColor=nil;setRecordingBusy(false);status.button?.image=NSImage(systemSymbolName:"viewfinder",accessibilityDescription:L("轻截"));status.button?.toolTip=L("轻截");let restore=restoreQuickAfterRecording;restoreQuickAfterRecording=false;if restore && !window.isVisible{showPanel()}}
     @objc func showEditor(){
+        guard scrollCapture == nil else{return}
         panel.orderOut(nil)
         if let area=window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame {
             var frame=window.frame
@@ -329,7 +334,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         PanelPlacement.save(moved.frame.origin)
     }
     func applicationWillTerminate(_ notification:Notification){if let panel {PanelPlacement.save(panel.frame.origin)}}
-    @objc func showPanel(){keepPanelOnScreen();panel.orderFrontRegardless()}
+    @objc func showPanel(){guard scrollCapture == nil else{return};keepPanelOnScreen();panel.orderFrontRegardless()}
     func windowShouldClose(_ sender:NSWindow)->Bool {if sender === window {panel.orderFrontRegardless()};return true}
     @objc func quit(){if recording {message(L("请先停止录制"),L("录屏保存完成后即可退出。"));return};NSApp.terminate(nil)}
     @objc func about(){
@@ -341,7 +346,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         let icon=NSImageView();icon.image=NSApp.applicationIconImage;icon.imageScaling = .scaleProportionallyUpOrDown;icon.setAccessibilityLabel(L("轻截"))
         NSLayoutConstraint.activate([icon.widthAnchor.constraint(equalToConstant:64),icon.heightAnchor.constraint(equalToConstant:64)])
         root.addArrangedSubview(icon)
-        let title=NSTextField(labelWithString:L("轻截 LightCapture 0.6.22"));title.font = .systemFont(ofSize:15,weight:.bold)
+        let title=NSTextField(labelWithString:L("轻截 LightCapture 0.6.24"));title.font = .systemFont(ofSize:15,weight:.bold)
         let text=NSTextField(wrappingLabelWithString:L("区域／窗口／全屏：⌥⌘2／4／3\n图片复制：⇧⌘C；保存：⌘S\n截图与录屏需在系统设置中允许屏幕录制。"));text.font = .systemFont(ofSize:13);text.preferredMaxLayoutWidth=292
         root.addArrangedSubview(title);root.addArrangedSubview(text)
         let ok=NSButton(title:L("好"),target:self,action:#selector(dismissAbout));ok.bezelStyle = .rounded;ok.keyEquivalent="\r";root.addArrangedSubview(ok)
@@ -480,7 +485,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         prefs.set(["x":"invalid","y":2],forKey:PanelPlacement.key)
         assert(PanelPlacement.restore(size:size,screens:[screen],fallback:fallback,defaults:prefs)==fallback)
     }
-    func selfTest(){DispatchQueue.main.asyncAfter(deadline:.now()+0.4){self.testEditableObjects();self.testRegionCancellation();self.testWindowCancellation();self.testSelectionMouseSurface();self.testClipboardImport();self.testPanelPlacement();let image=NSImage(size:NSSize(width:800,height:500));image.lockFocusFlipped(true);NSColor.white.setFill();NSRect(x:0,y:0,width:800,height:500).fill();"LightCapture 轻截".draw(at:NSPoint(x:60,y:50),withAttributes:[.font:NSFont.systemFont(ofSize:40),.foregroundColor:NSColor.black]);NSColor.systemBlue.setFill();NSRect(x:80,y:180,width:240,height:130).fill();image.unlockFocus();self.canvas.setImage(self.normalized(image)!);self.canvas.checkpoint();self.canvas.marks=[Mark(tool:.arrow,points:[NSPoint(x:500,y:120),NSPoint(x:310,y:230)],color:.systemRed,width:5),Mark(tool:.redact,points:[NSPoint(x:440,y:300),NSPoint(x:650,y:350)],color:.black,width:4),Mark(tool:.text,points:[NSPoint(x:400,y:380)],color:.systemRed,width:4,text:"本机处理 / Local only")];let path=ProcessInfo.processInfo.environment["LIGHTCAPTURE_TEST_OUTPUT"] ?? "/tmp/lightcapture-selftest.png";try? self.canvas.imageData()?.write(to:URL(fileURLWithPath:path));self.canvas.undoEdit();assert(self.canvas.marks.isEmpty);self.canvas.redoEdit();assert(self.canvas.marks.count==3);self.statusLabel.stringValue="自检通过：绘制、导出、撤销、重做";let data=self.canvas.imageData()!
+    func selfTest(){DispatchQueue.main.asyncAfter(deadline:.now()+0.4){self.testEditableObjects();self.testRegionCancellation();self.testWindowCancellation();self.testSelectionMouseSurface();self.testClipboardImport();self.testPanelPlacement();testScrollStitcher();let image=NSImage(size:NSSize(width:800,height:500));image.lockFocusFlipped(true);NSColor.white.setFill();NSRect(x:0,y:0,width:800,height:500).fill();"LightCapture 轻截".draw(at:NSPoint(x:60,y:50),withAttributes:[.font:NSFont.systemFont(ofSize:40),.foregroundColor:NSColor.black]);NSColor.systemBlue.setFill();NSRect(x:80,y:180,width:240,height:130).fill();image.unlockFocus();self.canvas.setImage(self.normalized(image)!);self.canvas.checkpoint();self.canvas.marks=[Mark(tool:.arrow,points:[NSPoint(x:500,y:120),NSPoint(x:310,y:230)],color:.systemRed,width:5),Mark(tool:.redact,points:[NSPoint(x:440,y:300),NSPoint(x:650,y:350)],color:.black,width:4),Mark(tool:.text,points:[NSPoint(x:400,y:380)],color:.systemRed,width:4,text:"本机处理 / Local only")];let path=ProcessInfo.processInfo.environment["LIGHTCAPTURE_TEST_OUTPUT"] ?? "/tmp/lightcapture-selftest.png";try? self.canvas.imageData()?.write(to:URL(fileURLWithPath:path));self.canvas.undoEdit();assert(self.canvas.marks.isEmpty);self.canvas.redoEdit();assert(self.canvas.marks.count==3);self.statusLabel.stringValue="自检通过：绘制、导出、撤销、重做";let data=self.canvas.imageData()!
         let bitmap=NSBitmapImageRep(data:data)!
         assert(bitmap.pixelsWide==Int(self.canvas.image!.size.width))
         let black=bitmap.colorAt(x:450,y:320)!.usingColorSpace(.deviceRGB)!
@@ -496,7 +501,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         try? VNImageRequestHandler(cgImage:bitmap.cgImage!).perform([request])
         let recognized=request.results?.compactMap{$0.topCandidates(1).first?.string}.joined(separator:"\n") ?? ""
         assert(recognized.contains("LightCapture"))
-        let result:[String:Any]=["status":"PASS","png_dimensions":[bitmap.pixelsWide,bitmap.pixelsHigh],"checks":["PNG export","JPEG export","opaque redaction pixels","undo","redo","zoom preserves export dimensions","Vision OCR","annotation hit testing","object move","arrow endpoint editing","four shape resize types","selection excluded from export","style editing","delete and undo/redo","pen text step movement","right click/drag/release cancel without capture","left drag confirms region","Escape cancels region","multi-display capture coordinates","window right-click cancellation","left click confirms selected window","frontmost window hit testing","window selected area retains nonzero alpha","region selected area retains nonzero alpha","empty and text clipboard rejected without replacing image","PNG and TIFF clipboard import preserves pixel dimensions","clipboard import opens editor and hides quick bar","clipboard tests do not modify system clipboard","quick panel position persists across defaults instances","offscreen panel is constrained to a visible display","negative-coordinate display placement","invalid position falls back safely"],"quick_panel_origin":[self.panel.frame.minX,self.panel.frame.minY],"ocr":recognized]
+        let result:[String:Any]=["status":"PASS","png_dimensions":[bitmap.pixelsWide,bitmap.pixelsHigh],"checks":["PNG export","JPEG export","opaque redaction pixels","undo","redo","zoom preserves export dimensions","Vision OCR","annotation hit testing","object move","arrow endpoint editing","four shape resize types","selection excluded from export","style editing","delete and undo/redo","pen text step movement","right click/drag/release cancel without capture","left drag confirms region","Escape cancels region","multi-display capture coordinates","window right-click cancellation","left click confirms selected window","frontmost window hit testing","window selected area retains nonzero alpha","region selected area retains nonzero alpha","empty and text clipboard rejected without replacing image","PNG and TIFF clipboard import preserves pixel dimensions","clipboard import opens editor and hides quick bar","clipboard tests do not modify system clipboard","quick panel position persists across defaults instances","offscreen panel is constrained to a visible display","negative-coordinate display placement","invalid position falls back safely","scroll stitch exact overlap and partial final step","scroll stitch pixel-exact output","scroll unchanged and incompatible frames rejected","scroll unrelated content rejected"],"quick_panel_origin":[self.panel.frame.minX,self.panel.frame.minY],"ocr":recognized]
         let report=try! JSONSerialization.data(withJSONObject:result,options:[.prettyPrinted,.sortedKeys])
         try! report.write(to:URL(fileURLWithPath:path+".json"))
         if CommandLine.arguments.contains("--test-exit") {NSApp.terminate(nil)}}}

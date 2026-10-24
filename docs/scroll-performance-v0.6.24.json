@@ -1,0 +1,11 @@
+{
+  "scope": "Synthetic 1200x900 viewport; three consecutive alignments repeated three times. Matching only, excludes scrolling, screenshot process and rendering.",
+  "old_median_match_ms": 236.75461111512655,
+  "new_median_match_ms": 2.3390555482668183,
+  "old_wait_seconds": 0.75,
+  "new_normal_wait_seconds": 0.22,
+  "old_scroll_fraction": 0.45,
+  "new_scroll_fraction": 0.62,
+  "retry_wait_seconds": 0.6,
+  "assertions": "Debug assertions retained with -assert-config Debug"
+}

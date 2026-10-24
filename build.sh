@@ -4,7 +4,7 @@ cd "$(dirname "$0")"
 APP="轻截 LightCapture.app"
 BUILD_CACHE="${TMPDIR:-/tmp}/lightcapture-module-cache"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$BUILD_CACHE"
-xcrun swiftc Source/Localization.swift Source/EditorUI.swift Source/Canvas.swift Source/RecordingSetup.swift Source/Recorder.swift Source/main.swift -o "$APP/Contents/MacOS/LightCapture" -module-cache-path "$BUILD_CACHE" -target arm64-apple-macos15.0 -framework AppKit -framework Vision -framework ScreenCaptureKit -framework AVFoundation -framework Carbon
+xcrun swiftc -O -assert-config Debug Source/Localization.swift Source/EditorUI.swift Source/Canvas.swift Source/RecordingSetup.swift Source/Recorder.swift Source/ScrollingCapture.swift Source/main.swift -o "$APP/Contents/MacOS/LightCapture" -module-cache-path "$BUILD_CACHE" -target arm64-apple-macos15.0 -framework AppKit -framework Vision -framework ScreenCaptureKit -framework AVFoundation -framework Carbon
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -17,8 +17,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleDevelopmentRegion</key><string>en</string>
 <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string></array>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.6.22</string>
-<key>CFBundleVersion</key><string>41</string>
+<key>CFBundleShortVersionString</key><string>0.6.24</string>
+<key>CFBundleVersion</key><string>43</string>
 <key>LSMinimumSystemVersion</key><string>15.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSMicrophoneUsageDescription</key><string>仅在你选择麦克风录屏时采集麦克风声音，并保存在本机录屏文件中。</string>

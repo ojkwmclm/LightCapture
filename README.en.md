@@ -2,7 +2,7 @@
 
 A compact screenshot, annotation and recording utility written in Swift / AppKit for Apple Silicon Macs, with Chinese and English interfaces.
 
-[简体中文](README.md) · [Download v0.6.21](https://github.com/ojkwmclm/LightCapture/releases/tag/v0.6.21)
+[简体中文](README.md) · [Download v0.6.24](https://github.com/ojkwmclm/LightCapture/releases/tag/v0.6.24)
 
 ## Features
 
@@ -17,11 +17,19 @@ A compact screenshot, annotation and recording utility written in Swift / AppKit
 
 **Apple Silicon (arm64), macOS 15 or later.** Intel builds are not provided or verified.
 
-Download `LightCapture-v0.6.21-macOS-arm64.zip` from [Releases](https://github.com/ojkwmclm/LightCapture/releases), extract it and move the app into Applications.
+Download `LightCapture-v0.6.24-macOS-arm64.zip` from [Releases](https://github.com/ojkwmclm/LightCapture/releases), extract it and move the app into Applications.
 
 The app is ad-hoc signed and has not been Developer ID signed or notarized. macOS may warn that the developer cannot be verified. Screen Recording permission is required for capture/recording; microphone recording needs microphone permission. Updating an ad-hoc build may require re-registering its permission entry.
 
 Select the recording target and MP4 destination before starting. The quick bar hides during recording; reopen from the Dock or use the menu bar to stop.
+
+## Scrolling capture
+
+Use the down-arrow button on the quick bar or Capture → Scrolling Capture in the editor. Scroll to the desired starting point and select the scrolling content, excluding fixed headers and scrollbars. The app scrolls down, removes matching overlaps, and opens the result in the editor. Finish early with Escape, Finish, or the menu-bar Scrolling Capture / Finish action. Cancel discards the capture.
+
+Extend the selection to the bottom of the scrolling viewport. If it ends above that edge, content below the selection cannot be included once the page reaches its scroll limit.
+
+Screen Recording and Accessibility access are required. Keep the target window still and visible. It may remain in the background; moving it or covering the scroll point stops capture. Keep the entire region visible: partial occlusions may appear in the screenshot. Uncertain alignment stops with the successfully stitched result preserved. Limits: 80 sections, 40000 pixels high, or 60 megapixels. Select at least 100 × 100 points within one display. Fixed headers, animation and repeated content can prevent alignment.
 
 ## Shortcuts
 
@@ -59,6 +67,6 @@ Clipboard tests use an isolated named pasteboard and do not write to the system 
 
 ## Limitations
 
-This is a 0.x release. Automatic scrolling capture, editable project files, recording pause, webcam overlays and video editing are not implemented. Image combination retains overlaps. Exports and cropping flatten annotations; crop supports undo. Window screenshots include visible overlaps. Full-screen screenshots currently use the primary display.
+This is a 0.x release. Editable project files, recording pause, webcam overlays and video editing are not implemented. Image combination retains overlaps. Exports and cropping flatten annotations; crop supports undo. Window screenshots include visible overlaps. Full-screen screenshots currently use the primary display.
 
 LightCapture independently implements a compact workflow inspired by FastStone Capture. It is not affiliated with FastStone and contains no FastStone binaries, resources or decompiled artifacts.
