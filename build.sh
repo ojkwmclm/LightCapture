@@ -17,8 +17,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleDevelopmentRegion</key><string>en</string>
 <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string></array>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.6.24</string>
-<key>CFBundleVersion</key><string>43</string>
+<key>CFBundleShortVersionString</key><string>0.6.25</string>
+<key>CFBundleVersion</key><string>44</string>
 <key>LSMinimumSystemVersion</key><string>15.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSMicrophoneUsageDescription</key><string>仅在你选择麦克风录屏时采集麦克风声音，并保存在本机录屏文件中。</string>

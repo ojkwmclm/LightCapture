@@ -11,6 +11,7 @@ enum Localizer {
         }
     }
     static let english: [String:String] = [
+        "按住 Control 并滚动鼠标滚轮，以指针为中心缩放":"Hold Control and scroll the mouse wheel to zoom around the pointer",
         "目标窗口已关闭，已停止捕获。":"The target window closed. Capture stopped.",
         "当前应用已切换，已停止捕获。":"The active application changed. Capture stopped.",
         "目标窗口已移动或被遮挡，已停止捕获。":"The target window moved or became covered. Capture stopped.",
@@ -198,7 +199,7 @@ enum Localizer {
         "请选择视频文件保存位置":"Choose where to save the video",
         "贴图":"Pin",
         "轻截":"LightCapture",
-        "轻截 LightCapture 0.6.24":"LightCapture 0.6.24",
+        "轻截 LightCapture 0.6.25":"LightCapture 0.6.25",
         "轻截 · 参考贴图":"LightCapture · Pinned Image",
         "轻截 · 图片编辑器":"LightCapture · Image Editor",
         "轻截 · 屏幕录制":"LightCapture · Screen Recording",

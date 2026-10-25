@@ -43,6 +43,18 @@ final class EditorCommandButton:NSButton {
 
 final class EditorScrollView: NSScrollView {
     var didLayout: (() -> Void)?
+    var zoomAtPointer: ((CGFloat, NSPoint) -> Void)?
+    var usesZoomMargins=false
+    override func scrollWheel(with event:NSEvent) {
+        guard event.modifierFlags.contains(.control) else{super.scrollWheel(with:event);return}
+        let delta=event.scrollingDeltaY
+        guard delta.isFinite,delta != 0 else{return}
+        // Natural-scrolling preference should not reverse a physical zoom gesture.
+        let direction:CGFloat=event.isDirectionInvertedFromDevice ? -1:1
+        let sensitivity:CGFloat=event.hasPreciseScrollingDeltas ? 0.008:0.12
+        let factor=exp(max(-0.5,min(0.5,delta*direction*sensitivity)))
+        zoomAtPointer?(factor,contentView.convert(event.locationInWindow,from:nil))
+    }
     override func layout() {super.layout();didLayout?()}
 }
 extension App {
@@ -100,6 +112,8 @@ extension App {
         let hint=NSTextField(wrappingLabelWithString:L("单击选中，拖动移动\n拖动控制点调整图形\nDelete 删除，Esc 取消选中"));hint.font = .systemFont(ofSize:11);hint.textColor = .secondaryLabelColor;hint.widthAnchor.constraint(equalToConstant:Localizer.isEnglish ? 186:148).isActive=true;editorSidebar.addArrangedSubview(hint)
         let spacer=NSView();spacer.setContentHuggingPriority(.defaultLow,for:.vertical);editorSidebar.addArrangedSubview(spacer)
         editorScroll=EditorScrollView();editorScroll.hasVerticalScroller=true;editorScroll.hasHorizontalScroller=true;editorScroll.autohidesScrollers=true;editorScroll.borderType = .noBorder;editorScroll.documentView=canvas;editorScroll.didLayout={ [weak self] in self?.updateCanvasLayout() }
+        editorScroll.zoomAtPointer={ [weak self] factor,point in self?.changeZoom(factor,at:point) }
+        editorScroll.toolTip=L("按住 Control 并滚动鼠标滚轮，以指针为中心缩放")
         editorTitle.font = .systemFont(ofSize:12);editorTitle.textColor = .secondaryLabelColor
         let titleRow=NSStackView(views:[editorTitle]);titleRow.edgeInsets=NSEdgeInsets(top:7,left:12,bottom:7,right:12)
         let workspace=NSStackView(views:[titleRow,editorScroll]);workspace.orientation = .vertical;workspace.spacing=0;workspace.alignment = .leading
@@ -117,8 +131,14 @@ extension App {
     }
     func updateCanvasLayout() {
         guard let scroll=editorScroll else{return};let size=scroll.contentSize
+        if canvas.zoomScale == nil {scroll.usesZoomMargins=false}
         var target=size
-        if let image=canvas.image,let scale=canvas.zoomScale {target=NSSize(width:max(size.width,image.size.width*scale+48),height:max(size.height,image.size.height*scale+48))}
+        if let image=canvas.image,let scale=canvas.zoomScale {
+            // Extra margins allow an image point to stay under the pointer even
+            // while crossing from a fitted image to a scrollable image.
+            let padding=scroll.usesZoomMargins ? NSSize(width:max(48,size.width*2),height:max(48,size.height*2)):NSSize(width:48,height:48)
+            target=NSSize(width:max(size.width,image.size.width*scale+padding.width),height:max(size.height,image.size.height*scale+padding.height))
+        }
         if canvas.frame.size != target {canvas.setFrameSize(target)}
         canvas.needsDisplay=true
         if let image=canvas.image {editorZoom.stringValue=LF("缩放 %@%%",Int((canvas.imageRect.width/image.size.width*100).rounded()))}else{editorZoom.stringValue=L("适合窗口")}
@@ -133,6 +153,48 @@ extension App {
     @objc func selectCrop() {canvas.clearSelection();canvas.tool = .crop;editorSidebar.isHidden=false;refreshEditor()}
     @objc func toggleDrawing() {editorSidebar.isHidden.toggle()}
     func changeZoom(_ factor:CGFloat) {guard let image=canvas.image else{return};let current=canvas.zoomScale ?? canvas.imageRect.width/image.size.width;canvas.zoomScale=max(0.05,min(4,current*factor));updateCanvasLayout()}
+    func changeZoom(_ factor:CGFloat,at clipPoint:NSPoint) {
+        guard let image=canvas.image,let scroll=editorScroll,factor.isFinite,factor>0 else{return}
+        let clip=scroll.contentView,oldRect=canvas.imageRect
+        guard oldRect.width>0,oldRect.height>0 else{return}
+        let point=canvas.convert(clipPoint,from:clip)
+        let unit=NSPoint(x:(point.x-oldRect.minX)/oldRect.width,y:(point.y-oldRect.minY)/oldRect.height)
+        let viewportPoint=NSPoint(x:clipPoint.x-clip.bounds.minX,y:clipPoint.y-clip.bounds.minY)
+        let current=oldRect.width/image.size.width
+        let scale=max(0.01,min(4,current*factor))
+        guard abs(scale-current)>0.000001 else{return}
+        scroll.usesZoomMargins=true;canvas.zoomScale=scale
+        updateCanvasLayout();scroll.layoutSubtreeIfNeeded()
+        let rect=canvas.imageRect
+        let anchored=NSPoint(x:rect.minX+unit.x*rect.width,y:rect.minY+unit.y*rect.height)
+        let inClip=clip.convert(anchored,from:canvas)
+        let proposed=NSRect(origin:NSPoint(x:inClip.x-viewportPoint.x,y:inClip.y-viewportPoint.y),size:clip.bounds.size)
+        clip.scroll(to:clip.constrainBoundsRect(proposed).origin);scroll.reflectScrolledClipView(clip)
+    }
+    func testPointerZoom() {
+        guard let image=canvas.image else{preconditionFailure("Missing zoom fixture")}
+        let clip=editorScroll.contentView
+        let original=canvas.imageData()!,marksCount=canvas.marks.count,historyCount=canvas.history.count
+        for unit in [NSPoint(x:0.2,y:0.3),NSPoint(x:0.8,y:0.7)] {
+            zoomFit()
+            let rect=canvas.imageRect
+            let anchor=NSPoint(x:rect.minX+rect.width*unit.x,y:rect.minY+rect.height*unit.y)
+            let inClip=clip.convert(anchor,from:canvas)
+            let viewport=NSPoint(x:inClip.x-clip.bounds.minX,y:inClip.y-clip.bounds.minY)
+            for factor:CGFloat in [1.25,2,0.5,0.8,0.01,10000] {
+                let point=NSPoint(x:clip.bounds.minX+viewport.x,y:clip.bounds.minY+viewport.y)
+                changeZoom(factor,at:point)
+                let r=canvas.imageRect
+                let after=clip.convert(NSPoint(x:r.minX+r.width*unit.x,y:r.minY+r.height*unit.y),from:canvas)
+                assert(abs(after.x-clip.bounds.minX-viewport.x)<1)
+                assert(abs(after.y-clip.bounds.minY-viewport.y)<1)
+                assert(canvas.zoomScale!>=0.01 && canvas.zoomScale!<=4)
+            }
+        }
+        assert(canvas.marks.count==marksCount && canvas.history.count==historyCount)
+        assert(canvas.imageData()==original && canvas.image?.size==image.size)
+        zoomFit()
+    }
     @objc func zoomIn(){changeZoom(1.25)}
     @objc func zoomOut(){changeZoom(0.8)}
     @objc func zoomFit(){canvas.zoomScale=nil;updateCanvasLayout()}

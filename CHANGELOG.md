@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.6.25 (2026-10-25)
+
+- Add Control + mouse-wheel zoom anchored to the pointer in the image editor (1%–400%).
+- Preserve ordinary wheel scrolling and keep exported pixels, annotations and undo history unchanged.
+- Add viewport margins during pointer zoom so the anchor stays fixed across fit-to-scroll transitions.
+
 ## v0.6.24 (2026-10-24)
 
 - Publish automatic scrolling capture and saved quick-bar position from local v0.6.22–v0.6.23 builds.

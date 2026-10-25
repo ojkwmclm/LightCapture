@@ -2,7 +2,7 @@
 
 A compact screenshot, annotation and recording utility written in Swift / AppKit for Apple Silicon Macs, with Chinese and English interfaces.
 
-[简体中文](README.md) · [Download v0.6.24](https://github.com/ojkwmclm/LightCapture/releases/tag/v0.6.24)
+[简体中文](README.md) · [Download v0.6.25](https://github.com/ojkwmclm/LightCapture/releases/tag/v0.6.25)
 
 ## Features
 
@@ -17,7 +17,7 @@ A compact screenshot, annotation and recording utility written in Swift / AppKit
 
 **Apple Silicon (arm64), macOS 15 or later.** Intel builds are not provided or verified.
 
-Download `LightCapture-v0.6.24-macOS-arm64.zip` from [Releases](https://github.com/ojkwmclm/LightCapture/releases), extract it and move the app into Applications.
+Download `LightCapture-v0.6.25-macOS-arm64.zip` from [Releases](https://github.com/ojkwmclm/LightCapture/releases), extract it and move the app into Applications.
 
 The app is ad-hoc signed and has not been Developer ID signed or notarized. macOS may warn that the developer cannot be verified. Screen Recording permission is required for capture/recording; microphone recording needs microphone permission. Updating an ad-hoc build may require re-registering its permission entry.
 
@@ -45,6 +45,8 @@ Screen Recording and Accessibility access are required. Keep the target window s
 | Undo / redo | ⌘Z / ⇧⌘Z |
 
 Switch languages from the gear or app menu. System-owned dialogs follow macOS language settings.
+
+Hold **Control** and scroll the mouse wheel in the editor to zoom around the pointer (1%–400%). Without Control, the wheel scrolls normally.
 
 ## Build and self-test
 

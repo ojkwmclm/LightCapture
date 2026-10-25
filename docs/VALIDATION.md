@@ -37,3 +37,7 @@ Build 43 compiles with optimization and explicit Debug assertion configuration. 
 ## v0.6.24 publication
 
 The release packages the same arm64 executable installed and accepted by the user (version 0.6.24 / build 43), with verified ad-hoc code signature. Screen Recording and Accessibility entries were refreshed before user acceptance. No additional recording/audio, Intel, or multiple-physical-display acceptance is implied. The public release includes scrolling capture and toolbar-position persistence developed since v0.6.21.
+
+## v0.6.25 pointer zoom
+
+Build 44 passes 38 self-test checks with Debug assertions enabled. Pointer-anchor tests cover two off-centre image points, zooming from fit to scrollable layout and back, repeated scaling, and 1%/400% limits with under-one-point anchor error. PNG data, annotation count and undo history remain unchanged. The app builds and its ad-hoc signature verifies. Real Control-wheel input is pending manual acceptance because desktop UI control returned SCStreamErrorDomain -3811; the running user editor was not closed. The release packages the same version 0.6.25 / build 44 executable installed locally.
