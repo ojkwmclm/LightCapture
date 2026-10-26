@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.6.26 (local build)
+
+- Use `screenshot-yyyyMMdd-HHmmss.png` as the default image export filename in both languages.
+
 ## v0.6.25 (2026-10-25)
 
 - Add Control + mouse-wheel zoom anchored to the pointer in the image editor (1%–400%).

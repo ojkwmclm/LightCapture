@@ -199,7 +199,7 @@ enum Localizer {
         "请选择视频文件保存位置":"Choose where to save the video",
         "贴图":"Pin",
         "轻截":"LightCapture",
-        "轻截 LightCapture 0.6.25":"LightCapture 0.6.25",
+        "轻截 LightCapture 0.6.26":"LightCapture 0.6.26",
         "轻截 · 参考贴图":"LightCapture · Pinned Image",
         "轻截 · 图片编辑器":"LightCapture · Image Editor",
         "轻截 · 屏幕录制":"LightCapture · Screen Recording",

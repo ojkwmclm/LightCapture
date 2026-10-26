@@ -277,7 +277,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
     @objc func undoEdit(){canvas.undoEdit()}
     @objc func redoEdit(){canvas.redoEdit()}
     @objc func copyImage(){guard let data=canvas.imageData() else{return};let pb=NSPasteboard.general;pb.clearContents();pb.setData(data,forType:.png);statusLabel.stringValue=L("已复制标注后的图片，可直接粘贴到聊天或文档")}
-    @objc func saveImage(){guard canvas.image != nil else{return};let p=NSSavePanel();p.allowedContentTypes=[.png,.jpeg,.pdf];p.nameFieldStringValue=L("轻截")+"-\(timestamp()).png";p.canCreateDirectories=true
+    @objc func saveImage(){guard canvas.image != nil else{return};let p=NSSavePanel();p.allowedContentTypes=[.png,.jpeg,.pdf];p.nameFieldStringValue="screenshot-\(timestamp()).png";p.canCreateDirectories=true
         if p.runModal() == .OK,let url=p.url {do{let data:Data?;if url.pathExtension.lowercased()=="pdf",let image=canvas.renderedImage(){let view=NSImageView(frame:NSRect(origin:.zero,size:image.size));view.image=image;data=view.dataWithPDF(inside:view.bounds)}else{data=canvas.imageData(["jpg","jpeg"].contains(url.pathExtension.lowercased()) ? .jpeg:.png)};guard let data else{throw NSError(domain:"LightCapture",code:2,userInfo:[NSLocalizedDescriptionKey:L("图片导出失败")])};try data.write(to:url,options:.atomic);statusLabel.stringValue=LF("已保存：%@",url.lastPathComponent)}catch{self.error(error)}}
     }
     @objc func ocr(){guard let image=canvas.renderedImage()?.cgImage(forProposedRect:nil,context:nil,hints:nil) else{return};statusLabel.stringValue=L("正在本机识别文字…");DispatchQueue.global(qos:.userInitiated).async{let request=VNRecognizeTextRequest();request.recognitionLevel = .accurate;request.recognitionLanguages=["zh-Hans","en-US"];request.usesLanguageCorrection=true
@@ -346,7 +346,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         let icon=NSImageView();icon.image=NSApp.applicationIconImage;icon.imageScaling = .scaleProportionallyUpOrDown;icon.setAccessibilityLabel(L("轻截"))
         NSLayoutConstraint.activate([icon.widthAnchor.constraint(equalToConstant:64),icon.heightAnchor.constraint(equalToConstant:64)])
         root.addArrangedSubview(icon)
-        let title=NSTextField(labelWithString:L("轻截 LightCapture 0.6.25"));title.font = .systemFont(ofSize:15,weight:.bold)
+        let title=NSTextField(labelWithString:L("轻截 LightCapture 0.6.26"));title.font = .systemFont(ofSize:15,weight:.bold)
         let text=NSTextField(wrappingLabelWithString:L("区域／窗口／全屏：⌥⌘2／4／3\n图片复制：⇧⌘C；保存：⌘S\n截图与录屏需在系统设置中允许屏幕录制。"));text.font = .systemFont(ofSize:13);text.preferredMaxLayoutWidth=292
         root.addArrangedSubview(title);root.addArrangedSubview(text)
         let ok=NSButton(title:L("好"),target:self,action:#selector(dismissAbout));ok.bezelStyle = .rounded;ok.keyEquivalent="\r";root.addArrangedSubview(ok)
