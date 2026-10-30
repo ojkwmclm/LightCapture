@@ -48,6 +48,8 @@ Switch languages from the gear or app menu. System-owned dialogs follow macOS la
 
 Hold **Control** and scroll the mouse wheel in the editor to zoom around the pointer (1%–400%). Without Control, the wheel scrolls normally.
 
+Local v0.6.27 adds eight canvas handles at corners and edge midpoints. Drag inward to crop or outward to add opaque white space without rescaling image content. Dimensions appear during the drag; Escape or right click cancels. Each completed drag is one undoable edit; annotations are flattened, and undo restores editable annotations. Limits: 1–40000 pixels per side and 60 megapixels total.
+
 ## Build and self-test
 
 Install Xcode Command Line Tools, then run:

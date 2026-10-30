@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.6.27 (user accepted, 2026-10-30)
+
+- Add eight canvas resize handles at image corners and edge midpoints. Drag inward to crop or outward to add opaque white space without scaling source pixels.
+- Preview dimensions while dragging; Escape or right click cancels. A completed drag is one undoable edit, with annotations flattened as for cropping.
+- Limit dimensions to 1–40000 pixels per side and 60 megapixels total.
+
 ## v0.6.26 (local build)
 
 - Use `screenshot-yyyyMMdd-HHmmss.png` as the default image export filename in both languages.

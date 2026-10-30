@@ -140,7 +140,7 @@ extension App {
             target=NSSize(width:max(size.width,image.size.width*scale+padding.width),height:max(size.height,image.size.height*scale+padding.height))
         }
         if canvas.frame.size != target {canvas.setFrameSize(target)}
-        canvas.needsDisplay=true
+        canvas.needsDisplay=true;canvas.window?.invalidateCursorRects(for:canvas)
         if let image=canvas.image {editorZoom.stringValue=LF("缩放 %@%%",Int((canvas.imageRect.width/image.size.width*100).rounded()))}else{editorZoom.stringValue=L("适合窗口")}
     }
     func refreshEditor() {
