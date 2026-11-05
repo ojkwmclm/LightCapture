@@ -2,7 +2,7 @@
 
 A compact screenshot, annotation and recording utility written in Swift / AppKit for Apple Silicon Macs, with Chinese and English interfaces.
 
-[简体中文](README.md) · [Download v0.6.25](https://github.com/ojkwmclm/LightCapture/releases/tag/v0.6.25)
+[简体中文](README.md) · [Download v0.6.29](https://github.com/ojkwmclm/LightCapture/releases/tag/v0.6.29)
 
 ## Features
 
@@ -17,7 +17,7 @@ A compact screenshot, annotation and recording utility written in Swift / AppKit
 
 **Apple Silicon (arm64), macOS 15 or later.** Intel builds are not provided or verified.
 
-Download `LightCapture-v0.6.25-macOS-arm64.zip` from [Releases](https://github.com/ojkwmclm/LightCapture/releases), extract it and move the app into Applications.
+Download `LightCapture-v0.6.29-macOS-arm64.zip` from [Releases](https://github.com/ojkwmclm/LightCapture/releases), extract it and move the app into Applications.
 
 The app is ad-hoc signed and has not been Developer ID signed or notarized. macOS may warn that the developer cannot be verified. Screen Recording permission is required for capture/recording; microphone recording needs microphone permission. Updating an ad-hoc build may require re-registering its permission entry.
 
@@ -48,7 +48,7 @@ Switch languages from the gear or app menu. System-owned dialogs follow macOS la
 
 Hold **Control** and scroll the mouse wheel in the editor to zoom around the pointer (1%–400%). Without Control, the wheel scrolls normally.
 
-Local v0.6.27 adds eight canvas handles at corners and edge midpoints. Drag inward to crop or outward to add opaque white space without rescaling image content. Dimensions appear during the drag; Escape or right click cancels. Each completed drag is one undoable edit; annotations are flattened, and undo restores editable annotations. Limits: 1–40000 pixels per side and 60 megapixels total.
+The editor provides eight canvas handles at corners and edge midpoints. Drag inward to crop or outward to add opaque white space without rescaling image content. Dimensions appear during the drag; Escape or right click cancels. Each completed drag is one undoable edit; annotations are flattened, and undo restores editable annotations. Limits: 1–40000 pixels per side and 60 megapixels total.
 
 ## Build and self-test
 

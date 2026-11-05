@@ -4,7 +4,7 @@
 
 使用 Swift / AppKit 编写的 Mac 截图、标注与录屏工具，支持中文和英文界面。
 
-[English](README.en.md) · [下载 v0.6.25](https://github.com/ojkwmclm/LightCapture/releases/tag/v0.6.25)
+[English](README.en.md) · [下载 v0.6.29](https://github.com/ojkwmclm/LightCapture/releases/tag/v0.6.29)
 
 ## 功能
 
@@ -21,7 +21,7 @@
 
 要求 **Apple Silicon（arm64）、macOS 15 或更新版本**，暂未提供或验证 Intel 构建。
 
-从 [Releases](https://github.com/ojkwmclm/LightCapture/releases) 下载 `LightCapture-v0.6.25-macOS-arm64.zip`，解压并将「轻截 LightCapture.app」放入应用程序目录。
+从 [Releases](https://github.com/ojkwmclm/LightCapture/releases) 下载 `LightCapture-v0.6.29-macOS-arm64.zip`，解压并将「轻截 LightCapture.app」放入应用程序目录。
 
 当前发行包采用临时签名，尚未经过 Developer ID 签名或 Apple 公证，macOS 可能提示无法验证开发者。截图和录屏需要在「系统设置 → 隐私与安全 → 录屏与系统录音」允许轻截；麦克风录音还需麦克风权限。更新临时签名版本后可能需要重新登记授权。
 
@@ -52,7 +52,7 @@
 
 编辑器内按住 **Control** 并滚动鼠标滚轮，可围绕指针位置缩放图片（1%–400%）；不按 Control 时仍为普通滚动。
 
-本地 0.6.27：图片四角和四边中点提供 8 个画布调整点。向内拖裁去边缘，向外拖以白色补充新增区域，不拉伸原图；拖动时显示像素尺寸，Esc 或右键取消。松开后记为一次可撤销编辑，标注会合并到图片，撤销可恢复。单边 1–40000 像素，总计不超过 6000 万像素。
+图片四角和四边中点提供 8 个画布调整点。向内拖裁去边缘，向外拖以白色补充新增区域，不拉伸原图；拖动时显示像素尺寸，Esc 或右键取消。松开后记为一次可撤销编辑，标注会合并到图片，撤销可恢复。单边 1–40000 像素，总计不超过 6000 万像素。
 
 ## 构建与自检
 

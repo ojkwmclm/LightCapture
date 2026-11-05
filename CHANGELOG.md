@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.6.29 (2026-11-05)
+
+- Publish canvas resize handles and the screenshot timestamp filename from v0.6.26–v0.6.27, plus the permission reminder improvements.
+- Correct the scrolling permission reminder to use Device Control & Data Access, with Accessibility noted as the alternate name on some systems, in Chinese and English.
+
+## v0.6.28 (local build)
+
+- Keep the scrolling-capture Accessibility permission reminder above ordinary application windows, including when LightCapture is inactive, across Spaces and alongside full-screen apps.
+
 ## v0.6.27 (user accepted, 2026-10-30)
 
 - Add eight canvas resize handles at image corners and edge midpoints. Drag inward to crop or outward to add opaque white space without scaling source pixels.

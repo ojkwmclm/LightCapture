@@ -236,11 +236,11 @@ extension App {
         if let scrollCapture {scrollCapture.stop();return}
         guard !capturing,!recording,!recordingBusy,NSApp.modalWindow==nil else{return}
         NSApp.activate(ignoringOtherApps:true)
-        let alert=NSAlert();alert.messageText=L("滚动截图");alert.informativeText=L("请先将目标内容滚动到起点，再框选可滚动的内容区域，避开固定标题栏和滚动条。开始后请勿移动窗口或操作页面。到底自动完成；也可按 Esc 或点击“完成”保留结果。自动滚动需要辅助功能权限。");alert.addButton(withTitle:L("选择区域…"));alert.addButton(withTitle:L("取消"))
+        let alert=NSAlert();alert.messageText=L("滚动截图");alert.informativeText=L("请先将目标内容滚动到起点，再框选可滚动的内容区域，避开固定标题栏和滚动条。开始后请勿移动窗口或操作页面。到底自动完成；也可按 Esc 或点击“完成”保留结果。自动滚动需要设备控制权限。");alert.addButton(withTitle:L("选择区域…"));alert.addButton(withTitle:L("取消"))
         guard alert.runModal() == .alertFirstButtonReturn else{return}
         guard CGPreflightPostEventAccess() else {
             _=CGRequestPostEventAccess()
-            message(L("需要辅助功能权限"),L("请在系统设置 → 隐私与安全性 → 辅助功能中允许轻截，然后重新发起滚动截图。"));return
+            message(L("需要设备控制权限"),L("请在「系统设置 → 隐私与安全 → 设备控制和数据访问」中允许轻截，再重新发起滚动截图。\n部分系统将此选项称为「辅助功能」。"),keepOnTop:true);return
         }
         let restoreEditor=window.isVisible
         capturing=true;window.orderOut(nil);panel.orderOut(nil)
