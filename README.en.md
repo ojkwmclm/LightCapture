@@ -50,6 +50,9 @@ Hold **Control** and scroll the mouse wheel in the editor to zoom around the poi
 
 The editor provides eight canvas handles at corners and edge midpoints. Drag inward to crop or outward to add opaque white space without rescaling image content. Dimensions appear during the drag; Escape or right click cancels. Each completed drag is one undoable edit; annotations are flattened, and undo restores editable annotations. Limits: 1–40000 pixels per side and 60 megapixels total.
 
+
+Local v0.6.31: Rotate opens a before/after adjustment window with a live preview and alignment grid. Use the slider or numeric field (-360° to 360°, 0.1° steps); positive angles turn clockwise. Options include automatic crop, background colour and full-screen preview. Confirm applies one undoable edit; Cancel leaves the image unchanged.
+
 ## Build and self-test
 
 Install Xcode Command Line Tools, then run:

@@ -66,6 +66,7 @@ extension App {
         case #selector(importClipboardImage):return L("从剪贴板导入 · ⌥⌘V")
         case #selector(undoEdit):return L("撤销上一次编辑 · ⌘Z")
         case #selector(redoEdit):return L("重做已撤销的编辑 · ⇧⌘Z")
+        case #selector(rotateImage):return L("任意角度旋转：对照预览并调整角度、裁剪和背景")
         case #selector(selectCrop):return L("裁剪：拖出需要保留的区域，可撤销")
         case #selector(toggleDrawing):return L("显示或隐藏左侧绘图工具")
         case #selector(zoomIn):return L("放大图片显示，不改变导出尺寸")
@@ -80,8 +81,8 @@ extension App {
         }
     }
     func buildEditorWindow() {
-        window=NSWindow(contentRect:NSRect(x:0,y:0,width:Localizer.isEnglish ? 1184:1120,height:760),styleMask:[.titled,.closable,.miniaturizable,.resizable],backing:.buffered,defer:false)
-        window.title=L("轻截 · 图片编辑器");window.minSize=NSSize(width:Localizer.isEnglish ? 1184:1040,height:560);window.center();window.delegate=self;window.isReleasedWhenClosed=false;window.appearance=NSAppearance(named:.aqua)
+        window=NSWindow(contentRect:NSRect(x:0,y:0,width:Localizer.isEnglish ? 1248:1120,height:760),styleMask:[.titled,.closable,.miniaturizable,.resizable],backing:.buffered,defer:false)
+        window.title=L("轻截 · 图片编辑器");window.minSize=NSSize(width:Localizer.isEnglish ? 1248:1092,height:560);window.center();window.delegate=self;window.isReleasedWhenClosed=false;window.appearance=NSAppearance(named:.aqua)
         let root=NSStackView();root.orientation = .vertical;root.spacing=0;root.alignment = .leading;window.contentView=root
         func command(_ title:String,_ symbol:String,_ action:Selector)->NSButton {
             let b=EditorCommandButton(title:title,target:self,action:action);b.image=NSImage(systemSymbolName:symbol,accessibilityDescription:nil);b.bezelStyle = .regularSquare;b.isBordered=false;b.imagePosition = .imageAbove;b.font = .systemFont(ofSize:11);b.image=b.image?.withSymbolConfiguration(.init(pointSize:19,weight:.regular));b.toolTip=commandHint(action,title);b.setAccessibilityLabel(title)
@@ -89,12 +90,13 @@ extension App {
         }
         func divider()->NSView {let v=NSBox();v.boxType = .separator;v.widthAnchor.constraint(equalToConstant:1).isActive=true;v.heightAnchor.constraint(equalToConstant:34).isActive=true;return v}
         editorUndo=command(L("撤销"),"arrow.uturn.backward",#selector(undoEdit));editorRedo=command(L("重做"),"arrow.uturn.forward",#selector(redoEdit))
+        editorRotate=command(L("旋转"),"rotate.right",#selector(rotateImage))
         recordButton=command(L("录屏"),"video",#selector(toggleRecording))
         editorPasteButton=command(L("粘贴"),"clipboard",#selector(importClipboardImage))
         refreshClipboardAvailability(force:true)
         let capture=NSPopUpButton(frame:.zero,pullsDown:true);capture.addItem(withTitle:L("截图"));capture.bezelStyle = .rounded;capture.toolTip=L("截图：选择区域、窗口或全屏捕获")
         capture.menu?.addItem(menuItem(L("区域截图"),#selector(region)));capture.menu?.addItem(menuItem(L("窗口截图"),#selector(captureWindow)));capture.menu?.addItem(menuItem(L("全屏截图"),#selector(full)));capture.menu?.addItem(menuItem(L("滚动截图"),#selector(scrollingCapture)));capture.menu?.addItem(menuItem(L("显示快速捕获栏"),#selector(showPanel)))
-        let toolbar=NSStackView(views:[command(L("打开"),"folder",#selector(openImage)),command(L("保存"),"square.and.arrow.down",#selector(saveImage)),command(L("复制"),"doc.on.doc",#selector(copyImage)),editorPasteButton!,divider(),editorUndo!,editorRedo!,divider(),command(L("裁剪"),"crop",#selector(selectCrop)),command(L("绘图"),"pencil.tip",#selector(toggleDrawing)),divider(),command(L("放大"),"plus.magnifyingglass",#selector(zoomIn)),command(L("缩小"),"minus.magnifyingglass",#selector(zoomOut)),command(L("适合"),"arrow.up.left.and.arrow.down.right",#selector(zoomFit)),command(L("原大"),"1.magnifyingglass",#selector(zoomActual)),divider(),command(L("文字识别"),"text.viewfinder",#selector(ocr)),command(L("贴图"),"pin",#selector(pin)),command(L("拼接"),"rectangle.stack",#selector(combine)),divider(),capture,recordButton!]);toolbar.spacing=3;toolbar.alignment = .centerY;toolbar.edgeInsets=NSEdgeInsets(top:8,left:8,bottom:8,right:8)
+        let toolbar=NSStackView(views:[command(L("打开"),"folder",#selector(openImage)),command(L("保存"),"square.and.arrow.down",#selector(saveImage)),command(L("复制"),"doc.on.doc",#selector(copyImage)),editorPasteButton!,divider(),editorUndo!,editorRedo!,divider(),command(L("裁剪"),"crop",#selector(selectCrop)),editorRotate!,command(L("绘图"),"pencil.tip",#selector(toggleDrawing)),divider(),command(L("放大"),"plus.magnifyingglass",#selector(zoomIn)),command(L("缩小"),"minus.magnifyingglass",#selector(zoomOut)),command(L("适合"),"arrow.up.left.and.arrow.down.right",#selector(zoomFit)),command(L("原大"),"1.magnifyingglass",#selector(zoomActual)),divider(),command(L("文字识别"),"text.viewfinder",#selector(ocr)),command(L("贴图"),"pin",#selector(pin)),command(L("拼接"),"rectangle.stack",#selector(combine)),divider(),capture,recordButton!]);toolbar.spacing=3;toolbar.alignment = .centerY;toolbar.edgeInsets=NSEdgeInsets(top:8,left:8,bottom:8,right:8)
         root.addArrangedSubview(toolbar)
         let line=NSBox();line.boxType = .separator;root.addArrangedSubview(line)
         editorSidebar=NSStackView();editorSidebar.orientation = .vertical;editorSidebar.alignment = .leading;editorSidebar.spacing=12;editorSidebar.edgeInsets=NSEdgeInsets(top:16,left:12,bottom:12,right:12);editorSidebar.widthAnchor.constraint(equalToConstant:Localizer.isEnglish ? 210:174).isActive=true
@@ -145,6 +147,7 @@ extension App {
     }
     func refreshEditor() {
         editorColor?.color=canvas.ink;editorWidth?.selectedSegment=canvas.stroke<=2 ? 0:(canvas.stroke>=8 ? 2:1)
+        editorRotate?.isEnabled = canvas.image != nil
         updateCanvasLayout();editorUndo?.isEnabled = !canvas.history.isEmpty;editorRedo?.isEnabled = !canvas.future.isEmpty
         for (i,b) in editorTools.enumerated(){b.state=Tool.allCases[i]==canvas.tool ? .on:.off;b.contentTintColor=Tool.allCases[i]==canvas.tool ? .systemBlue:.labelColor;b.needsDisplay=true}
         if let image=canvas.image {editorTitle.stringValue=documentName;statusLabel.stringValue=LF("%@ × %@ 像素  ·  %@ 个标注  ·  %@",Int(image.size.width),Int(image.size.height),canvas.marks.count,canvas.tool.title)}

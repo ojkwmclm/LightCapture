@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.6.31 (local build)
+
+- Replace the basic rotation prompt with a side-by-side adjustment window: before/after preview, alignment grid, continuous angle slider, 0.1° numeric stepping, automatic crop, background colour, and full-screen preview.
+- Support signed -360° to 360° angles; positive rotates clockwise. Preview changes apply only on confirmation; Cancel keeps the original.
+- Automatically crop to a centred rectangle within the rotated source when enabled.
+
+## v0.6.30 (local build)
+
+- Add an editor Rotate command for integer angles 1–360°, clockwise or counterclockwise.
+- Expand output bounds to keep the whole image, fill empty areas white, and support undo/redo. Rotation flattens annotations; undo restores them.
+- Validate angles and enforce the 40000-pixel side / 60-megapixel output limits.
+
 ## v0.6.29 (2026-11-05)
 
 - Publish canvas resize handles and the screenshot timestamp filename from v0.6.26–v0.6.27, plus the permission reminder improvements.
