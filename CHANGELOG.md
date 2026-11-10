@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.6.34 (local build)
+
+- Show the quick capture bar after a screenshot is copied. Keep the editor closed and omit the success prompt.
+
+## v0.6.33 (local build)
+
+- Copy successful region, window, full-screen and scrolling screenshots directly to the clipboard as PNG, without a success prompt or opening the editor.
+- Keep the current editor image intact; use Paste or Clipboard Import to edit a capture.
+
+## v0.6.32 (local build)
+
+- Keep the scrolling-capture introduction above ordinary application windows, including while inactive; share the existing permission-reminder window policy.
+
 ## v0.6.31 (local build)
 
 - Replace the basic rotation prompt with a side-by-side adjustment window: before/after preview, alignment grid, continuous angle slider, 0.1° numeric stepping, automatic crop, background colour, and full-screen preview.

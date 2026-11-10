@@ -11,6 +11,7 @@ enum Localizer {
         }
     }
     static let english: [String:String] = [
+        "无法将截图复制到剪贴板。":"Unable to copy the screenshot to the clipboard.",
         "任意角度旋转":"Rotate by Any Angle",
         "旋转前":"Before",
         "旋转后":"After",
@@ -225,7 +226,7 @@ enum Localizer {
         "请选择视频文件保存位置":"Choose where to save the video",
         "贴图":"Pin",
         "轻截":"LightCapture",
-        "轻截 LightCapture 0.6.31":"LightCapture 0.6.31",
+        "轻截 LightCapture 0.6.34":"LightCapture 0.6.34",
         "轻截 · 参考贴图":"LightCapture · Pinned Image",
         "轻截 · 图片编辑器":"LightCapture · Image Editor",
         "轻截 · 屏幕录制":"LightCapture · Screen Recording",

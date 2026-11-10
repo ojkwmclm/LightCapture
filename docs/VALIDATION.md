@@ -57,3 +57,11 @@ Build 49 passes the full 45-check self-test. Rotation checks cover every integer
 ## v0.6.31 rotation adjustment (local)
 
 Build 50 passes 47 self-test checks, including signed/fractional angle validation, custom background output, automatic-crop containment over sampled angles and crop-corner pixel comparison within the same colour-managed bitmap. Tests retain all prior cardinal rotation, undo/redo and image editing checks. CUA inspected the before/after window and grid, typed 17.3° and observed slider/stepper synchronisation, toggled automatic crop to 747×290 for an 800×500 fixture, entered/exited full-screen preview, confirmed the same output dimensions and restored 800×500 with Undo. Cancel was checked to retain the original dimensions. Source preview is cached at a maximum 1400-pixel longest edge; final rendering uses full resolution. User physical-mouse acceptance and the English desktop layout remain pending. This build is committed to the repository; no v0.6.31 release package has been published.
+
+## v0.6.33 clipboard capture default (local)
+
+Build 52 passes 48 self-test checks. A named pasteboard test exercises the shared screenshot completion path: PNG is available for paste; no editor, quick bar or success dialog opens; existing editor image and name are retained; cancellation and invalid image data leave the prior clipboard value intact. The test does not write to the system clipboard. Region, window and full-screen capture route the native PNG through this path, as does the stitched scrolling result after PNG encoding. Live screen capture and cross-app paste were not exercised for this build.
+
+## v0.6.34 quick bar after capture (local)
+
+Build 53 passes 48 self-test checks. The shared screenshot completion check verifies that copying valid PNG data to an isolated pasteboard shows only the quick capture bar, leaves the editor image intact, and opens no success dialog. Live capture and cross-app focus were not retested.

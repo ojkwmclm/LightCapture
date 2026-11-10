@@ -235,24 +235,28 @@ extension App {
     @objc func scrollingCapture(){
         if let scrollCapture {scrollCapture.stop();return}
         guard !capturing,!recording,!recordingBusy,NSApp.modalWindow==nil else{return}
+        let foreground=NSWorkspace.shared.frontmostApplication
         NSApp.activate(ignoringOtherApps:true)
         let alert=NSAlert();alert.messageText=L("滚动截图");alert.informativeText=L("请先将目标内容滚动到起点，再框选可滚动的内容区域，避开固定标题栏和滚动条。开始后请勿移动窗口或操作页面。到底自动完成；也可按 Esc 或点击“完成”保留结果。自动滚动需要设备控制权限。");alert.addButton(withTitle:L("选择区域…"));alert.addButton(withTitle:L("取消"))
+        keepWindowOnTop(alert.window)
         guard alert.runModal() == .alertFirstButtonReturn else{return}
         guard CGPreflightPostEventAccess() else {
             _=CGRequestPostEventAccess()
             message(L("需要设备控制权限"),L("请在「系统设置 → 隐私与安全 → 设备控制和数据访问」中允许轻截，再重新发起滚动截图。\n部分系统将此选项称为「辅助功能」。"),keepOnTop:true);return
         }
-        let restoreEditor=window.isVisible
+        let previous=screenshotSurface
         capturing=true;window.orderOut(nil);panel.orderOut(nil)
         DispatchQueue.main.asyncAfter(deadline:.now()+0.2){[self] in
-            guard let rect=RegionView.chooseScreenshot(),rect.width>=100,rect.height>=100 else{self.capturing=false;if restoreEditor{self.showEditor()}else{self.showPanel()};return}
+            guard let rect=RegionView.chooseScreenshot(),rect.width>=100,rect.height>=100 else{self.capturing=false;self.restoreScreenshotSurface(previous);return}
             guard NSScreen.screens.contains(where:{ screen in
                 let top=NSScreen.screens.first?.frame.maxY ?? 0
                 return CGRect(x:screen.frame.minX,y:top-screen.frame.maxY,width:screen.frame.width,height:screen.frame.height).contains(rect)
-            }) else{self.capturing=false;self.showPanel();self.message(L("滚动截图"),L("请在同一显示器内选择截图区域。"));return}
+            }) else{self.capturing=false;self.restoreScreenshotSurface(previous);self.message(L("滚动截图"),L("请在同一显示器内选择截图区域。"));return}
             let controller=ScrollingCaptureController(rect:rect){[weak self] image,note in
                 guard let self else{return};self.scrollCapture=nil;self.capturing=false;self.status.button?.image=NSImage(systemSymbolName:"viewfinder",accessibilityDescription:L("轻截"))
-                if let image {self.documentName=L("滚动截图");self.canvas.setImage(NSImage(cgImage:image,size:NSSize(width:image.width,height:image.height)));self.refreshEditor();self.showEditor()}else if restoreEditor{self.showEditor()}else{self.showPanel()}
+                let png=image.flatMap{NSBitmapImageRep(cgImage:$0).representation(using:.png,properties:[:])}
+                let copied=self.finishScreenshot(png,restoring:previous,returnFocusTo:note == nil ? foreground:nil)
+                if image != nil && !copied && note == nil {self.message(L("滚动截图"),L("无法将截图复制到剪贴板。"))}
                 if let note {self.message(L("滚动截图"),note)}
             }
             self.scrollCapture=controller;self.status.button?.image=NSImage(systemSymbolName:"arrow.down.square.fill",accessibilityDescription:L("完成滚动截图"));controller.start()

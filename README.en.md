@@ -25,11 +25,13 @@ Select the recording target and MP4 destination before starting. The quick bar h
 
 ## Scrolling capture
 
-Use the down-arrow button on the quick bar or Capture → Scrolling Capture in the editor. Scroll to the desired starting point and select the scrolling content, excluding fixed headers and scrollbars. The app scrolls down, removes matching overlaps, and opens the result in the editor. Finish early with Escape, Finish, or the menu-bar Scrolling Capture / Finish action. Cancel discards the capture.
+Use the down-arrow button on the quick bar or Capture → Scrolling Capture in the editor. Scroll to the desired starting point and select the scrolling content, excluding fixed headers and scrollbars. The app scrolls down, removes matching overlaps, and copies the result to the clipboard. Finish early with Escape, Finish, or the menu-bar Scrolling Capture / Finish action. Cancel discards the capture.
 
 Extend the selection to the bottom of the scrolling viewport. If it ends above that edge, content below the selection cannot be included once the page reaches its scroll limit.
 
 Screen Recording and Accessibility access are required. Keep the target window still and visible. It may remain in the background; moving it or covering the scroll point stops capture. Keep the entire region visible: partial occlusions may appear in the screenshot. Uncertain alignment stops with the successfully stitched result preserved. Limits: 80 sections, 40000 pixels high, or 60 megapixels. Select at least 100 × 100 points within one display. Fixed headers, animation and repeated content can prevent alignment.
+
+In local v0.6.34, successful region, window, full-screen and scrolling captures copy to the clipboard and show the quick capture bar, without a success prompt or opening the editor. Paste in the destination app with ⌘V, or import the image from the clipboard in LightCapture to annotate it.
 
 ## Shortcuts
 
