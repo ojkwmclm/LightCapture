@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.6.37 (local build)
+
+- Add focused-editor Command-V to import clipboard images and Command-A to select the whole image, then Command-C to copy the annotated image.
+- Preserve standard text shortcuts when editing text and leave other windows/apps unaffected. Selection borders are excluded from export.
+
+## v0.6.36 (local build)
+
+- Run one ordinary instance per user and application identity using an OS file lock. Additional launches wake the existing process and exit before constructing UI or registering shortcuts.
+- Reopening shows the quick bar while preserving an active selection, recording or modal dialog. Existing editor content is retained.
+- Keep self-tests isolated from the normal instance lock; verify lock exclusion using a separate process.
+
+## v0.6.35 (local build)
+
+- Show a persistent region-selection overlay per display instead of one window spanning multiple displays. Keep prompts centred on each display and start focus on the pointer display.
+- Preserve cross-display drag coordinates and right-click/Escape cancellation. Cancel safely on display reconfiguration and restore the prior capture surface.
+
 ## v0.6.34 (local build)
 
 - Show the quick capture bar after a screenshot is copied. Keep the editor closed and omit the success prompt.

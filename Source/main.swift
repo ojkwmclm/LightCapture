@@ -59,6 +59,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
     var editorPasteButton:NSButton?
     var clipboardTimer:Timer?
     var screenObserver:NSObjectProtocol?
+    var instanceObserver:NSObjectProtocol?
     var clipboardChangeCount = -1
     var clipboardContainsImage=false
     var editorScroll: EditorScrollView!
@@ -72,6 +73,11 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
     var restoreQuickAfterRecording=false
     var recordingBusy=false
     func applicationDidFinishLaunching(_ note:Notification) {
+        instanceObserver=DistributedNotificationCenter.default().addObserver(forName:SingleInstance.wakeNotification,object:nil,queue:.main){[weak self] note in
+            guard (note.userInfo?["bundleIdentifier"] as? String)==(Bundle.main.bundleIdentifier ?? "local.lightcapture.app"),
+                  note.object == nil || (note.object as? String)==String(getpid()) else{return}
+            self?.wakeExistingInstance()
+        }
         NSApp.setActivationPolicy(.regular);if let url=Bundle.main.url(forResource:"LightCapture",withExtension:"icns"),let icon=NSImage(contentsOf:url){NSApp.applicationIconImage=icon};buildMenus();buildWindow();buildPanel();buildStatus();registerHotkeys()
         startClipboardMonitoring()
         screenObserver=NotificationCenter.default.addObserver(forName:NSApplication.didChangeScreenParametersNotification,object:nil,queue:.main){[weak self] _ in self?.keepPanelOnScreen()}
@@ -79,15 +85,15 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         if let index=CommandLine.arguments.firstIndex(of:"--open"),CommandLine.arguments.count>index+1 {load(URL(fileURLWithPath:CommandLine.arguments[index+1]));showEditor()}
         if CommandLine.arguments.contains("--self-test") {selfTest()}
     }
+    func wakeExistingInstance(){
+        guard panel != nil else{return}
+        if let modal=NSApp.modalWindow {modal.makeKeyAndOrderFront(nil)}
+        else if scrollCapture != nil {scrollCapture?.controls.orderFrontRegardless()}
+        else {window.orderOut(nil);showPanel()}
+        NSApp.activate(ignoringOtherApps:true)
+    }
     func applicationShouldHandleReopen(_ sender:NSApplication,hasVisibleWindows flag:Bool)->Bool {
-        if recording {showPanel()}
-        else if let modal=sender.modalWindow {modal.makeKeyAndOrderFront(nil)}
-        else if window.isVisible || window.isMiniaturized {
-            if window.isMiniaturized {window.deminiaturize(nil)}
-            showEditor()
-        } else {showPanel()}
-        sender.activate(ignoringOtherApps:true)
-        return false
+        wakeExistingInstance();return false
     }
     func button(_ title:String,_ action:Selector,_ symbol:String?=nil)->NSButton {
         let b=NSButton(title:title,target:self,action:action);b.bezelStyle = .rounded
@@ -383,7 +389,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         let icon=NSImageView();icon.image=NSApp.applicationIconImage;icon.imageScaling = .scaleProportionallyUpOrDown;icon.setAccessibilityLabel(L("轻截"))
         NSLayoutConstraint.activate([icon.widthAnchor.constraint(equalToConstant:64),icon.heightAnchor.constraint(equalToConstant:64)])
         root.addArrangedSubview(icon)
-        let title=NSTextField(labelWithString:L("轻截 LightCapture 0.6.34"));title.font = .systemFont(ofSize:15,weight:.bold)
+        let title=NSTextField(labelWithString:L("轻截 LightCapture 0.6.37"));title.font = .systemFont(ofSize:15,weight:.bold)
         let text=NSTextField(wrappingLabelWithString:L("区域／窗口／全屏：⌥⌘2／4／3\n图片复制：⇧⌘C；保存：⌘S\n截图与录屏需在系统设置中允许屏幕录制。"));text.font = .systemFont(ofSize:13);text.preferredMaxLayoutWidth=292
         root.addArrangedSubview(title);root.addArrangedSubview(text)
         let ok=NSButton(title:L("好"),target:self,action:#selector(dismissAbout));ok.bezelStyle = .rounded;ok.keyEquivalent="\r";root.addArrangedSubview(ok)
@@ -443,6 +449,14 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
             c.selectMark(0);assert(c.beginObjectDrag(at:a));c.dragObject(to:NSPoint(x:120,y:130));c.endObjectDrag()
             assert(c.marks[0].points[0]==NSPoint(x:120,y:130))
         }
+    }
+    func testRegionOverlayCoordinates(){
+        let primary=CGRect(x:0,y:0,width:1470,height:956),secondary=CGRect(x:1470,y:-124,width:1920,height:1080)
+        let cross=CGRect(x:1400,y:100,width:200,height:200)
+        assert(RegionView.overlayRect(cross,frame:primary).intersection(CGRect(origin:.zero,size:primary.size))==CGRect(x:1400,y:656,width:70,height:200))
+        assert(RegionView.overlayRect(cross,frame:secondary).intersection(CGRect(origin:.zero,size:secondary.size))==CGRect(x:0,y:656,width:130,height:200))
+        assert(RegionView.quartzRect(cross,mainTop:956)==CGRect(x:1400,y:656,width:200,height:200))
+        assert(RegionView.quartzRect(CGRect(x:-500,y:1000,width:200,height:100),mainTop:956)==CGRect(x:-500,y:-144,width:200,height:100))
     }
     func testRegionCancellation(){
         func event(_ type:NSEvent.EventType,_ x:CGFloat=40,_ y:CGFloat=40)->NSEvent {
@@ -517,6 +531,41 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         assert(importImage(from:pb));assert(canvas.image?.size==NSSize(width:32,height:24))
         pb.clearContents();assert(!importImage(from:pb));assert(canvas.image?.size==NSSize(width:32,height:24))
     }
+    func testEditorImageShortcuts(){
+        let pb=NSPasteboard.withUniqueName();defer{pb.releaseGlobally()}
+        precondition(pb.name != NSPasteboard.general.name)
+        let editor=window as! ImageEditorWindow
+        let originalHandler=editor.shortcut
+        defer{editor.shortcut=originalHandler;window.makeFirstResponder(canvas)}
+        var keys:[String]=[]
+        editor.shortcut={key in keys.append(key);return self.editorImageShortcut(key,to:pb)}
+        let rep=NSBitmapImageRep(bitmapDataPlanes:nil,pixelsWide:31,pixelsHigh:19,bitsPerSample:8,samplesPerPixel:4,hasAlpha:true,isPlanar:false,colorSpaceName:.deviceRGB,bytesPerRow:0,bitsPerPixel:0)!
+        for y in 0..<19 {for x in 0..<31{rep.setColor(NSColor(deviceRed:0.2,green:0.5,blue:0.8,alpha:1),atX:x,y:y)}}
+        pb.setData(rep.representation(using:.png,properties:[:])!,forType:.png)
+        showEditor();window.makeFirstResponder(canvas)
+        func event(_ key:String)->NSEvent {NSEvent.keyEvent(with:.keyDown,location:.zero,modifierFlags:.command,timestamp:0,windowNumber:editor.windowNumber,context:nil,characters:key,charactersIgnoringModifiers:key,isARepeat:false,keyCode:0)!}
+        assert(editor.imageShortcutFocus)
+        assert(editor.performKeyEquivalent(with:event("v")))
+        assert(canvas.image?.size==NSSize(width:31,height:19) && !canvas.imageSelected)
+        assert(editor.performKeyEquivalent(with:event("a")) && canvas.imageSelected)
+        let expected=canvas.imageData()!
+        assert(editor.performKeyEquivalent(with:event("c")) && pb.data(forType:.png)==expected)
+        assert(canvas.imageData()==expected && canvas.history.isEmpty)
+        let text=NSTextView(frame:NSRect(x:0,y:0,width:100,height:50));text.string="text editing"
+        editor.contentView!.addSubview(text);editor.makeFirstResponder(text)
+        assert(!editor.imageShortcutFocus)
+        let count=keys.count;editor.copy(nil);editor.paste(nil);editor.selectAll(nil);assert(keys.count==count)
+        text.removeFromSuperview();editor.makeFirstResponder(canvas)
+        let other=NSWindow(contentRect:NSRect(x:0,y:0,width:100,height:100),styleMask:.titled,backing:.buffered,defer:false);other.isReleasedWhenClosed=false
+        other.makeKeyAndOrderFront(nil);assert(!editor.imageShortcutFocus)
+        editor.copy(nil);editor.paste(nil);editor.selectAll(nil);assert(keys.count==count)
+        other.close();editor.makeKeyAndOrderFront(nil)
+        canvas.clearSelection();assert(!canEditorImageShortcut("c",to:pb))
+        pb.clearContents();pb.setString("not an image",forType:.string)
+        let original=canvas.image;assert(!editorImageShortcut("v",to:pb) && canvas.image === original)
+        canvas.image=nil;assert(!canEditorImageShortcut("a",to:pb))
+        canvas.image=original
+    }
     func testScreenshotClipboard(){
         let pb=NSPasteboard.withUniqueName();defer{pb.releaseGlobally()}
         precondition(pb.name != NSPasteboard.general.name)
@@ -550,7 +599,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         prefs.set(["x":"invalid","y":2],forKey:PanelPlacement.key)
         assert(PanelPlacement.restore(size:size,screens:[screen],fallback:fallback,defaults:prefs)==fallback)
     }
-    func selfTest(){DispatchQueue.main.asyncAfter(deadline:.now()+0.4){self.testEditableObjects();self.testRegionCancellation();self.testWindowCancellation();self.testSelectionMouseSurface();self.testClipboardImport();self.testScreenshotClipboard();self.testPanelPlacement();testCanvasEdges();testImageRotation();testRotationAdjustment();testScrollStitcher();let image=NSImage(size:NSSize(width:800,height:500));image.lockFocusFlipped(true);NSColor.white.setFill();NSRect(x:0,y:0,width:800,height:500).fill();"LightCapture 轻截".draw(at:NSPoint(x:60,y:50),withAttributes:[.font:NSFont.systemFont(ofSize:40),.foregroundColor:NSColor.black]);NSColor.systemBlue.setFill();NSRect(x:80,y:180,width:240,height:130).fill();image.unlockFocus();self.canvas.setImage(self.normalized(image)!);self.canvas.checkpoint();self.canvas.marks=[Mark(tool:.arrow,points:[NSPoint(x:500,y:120),NSPoint(x:310,y:230)],color:.systemRed,width:5),Mark(tool:.redact,points:[NSPoint(x:440,y:300),NSPoint(x:650,y:350)],color:.black,width:4),Mark(tool:.text,points:[NSPoint(x:400,y:380)],color:.systemRed,width:4,text:"本机处理 / Local only")];let path=ProcessInfo.processInfo.environment["LIGHTCAPTURE_TEST_OUTPUT"] ?? "/tmp/lightcapture-selftest.png";try? self.canvas.imageData()?.write(to:URL(fileURLWithPath:path));self.canvas.undoEdit();assert(self.canvas.marks.isEmpty);self.canvas.redoEdit();assert(self.canvas.marks.count==3);self.statusLabel.stringValue="自检通过：绘制、导出、撤销、重做";let data=self.canvas.imageData()!
+    func selfTest(){DispatchQueue.main.asyncAfter(deadline:.now()+0.4){self.testEditableObjects();self.testRegionCancellation();self.testRegionOverlayCoordinates();self.testWindowCancellation();self.testSelectionMouseSurface();self.testClipboardImport();self.testEditorImageShortcuts();self.testScreenshotClipboard();self.testPanelPlacement();testInstanceLock();testCanvasEdges();testImageRotation();testRotationAdjustment();testScrollStitcher();let image=NSImage(size:NSSize(width:800,height:500));image.lockFocusFlipped(true);NSColor.white.setFill();NSRect(x:0,y:0,width:800,height:500).fill();"LightCapture 轻截".draw(at:NSPoint(x:60,y:50),withAttributes:[.font:NSFont.systemFont(ofSize:40),.foregroundColor:NSColor.black]);NSColor.systemBlue.setFill();NSRect(x:80,y:180,width:240,height:130).fill();image.unlockFocus();self.canvas.setImage(self.normalized(image)!);self.canvas.checkpoint();self.canvas.marks=[Mark(tool:.arrow,points:[NSPoint(x:500,y:120),NSPoint(x:310,y:230)],color:.systemRed,width:5),Mark(tool:.redact,points:[NSPoint(x:440,y:300),NSPoint(x:650,y:350)],color:.black,width:4),Mark(tool:.text,points:[NSPoint(x:400,y:380)],color:.systemRed,width:4,text:"本机处理 / Local only")];let path=ProcessInfo.processInfo.environment["LIGHTCAPTURE_TEST_OUTPUT"] ?? "/tmp/lightcapture-selftest.png";try? self.canvas.imageData()?.write(to:URL(fileURLWithPath:path));self.canvas.undoEdit();assert(self.canvas.marks.isEmpty);self.canvas.redoEdit();assert(self.canvas.marks.count==3);self.statusLabel.stringValue="自检通过：绘制、导出、撤销、重做";let data=self.canvas.imageData()!
         let bitmap=NSBitmapImageRep(data:data)!
         assert(bitmap.pixelsWide==Int(self.canvas.image!.size.width))
         let black=bitmap.colorAt(x:450,y:320)!.usingColorSpace(.deviceRGB)!
@@ -567,11 +616,17 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         try? VNImageRequestHandler(cgImage:bitmap.cgImage!).perform([request])
         let recognized=request.results?.compactMap{$0.topCandidates(1).first?.string}.joined(separator:"\n") ?? ""
         assert(recognized.contains("LightCapture"))
-        let result:[String:Any]=["status":"PASS","png_dimensions":[bitmap.pixelsWide,bitmap.pixelsHigh],"checks":["PNG export","JPEG export","opaque redaction pixels","undo","redo","zoom preserves export dimensions","rotation 90 180 270 pixel direction and undo annotations","rotation all integer angles 1 to 359 and white corners","rotation 360 no-op invalid angles and image-size limit","rotation fractional signed angle preview validation and custom background","rotation auto crop geometry and corner pixels","eight canvas edges crop and expand at three zoom levels","canvas resize preserves source pixels and fills white","canvas resize undo restores annotations and redo","canvas resize Escape and right-click cancellation and size limits","pointer zoom anchors across fit and scroll transitions","pointer zoom limits and unchanged export or annotations","Vision OCR","annotation hit testing","object move","arrow endpoint editing","four shape resize types","selection excluded from export","style editing","delete and undo/redo","pen text step movement","right click/drag/release cancel without capture","left drag confirms region","Escape cancels region","multi-display capture coordinates","window right-click cancellation","left click confirms selected window","frontmost window hit testing","window selected area retains nonzero alpha","region selected area retains nonzero alpha","empty and text clipboard rejected without replacing image","PNG and TIFF clipboard import preserves pixel dimensions","clipboard import opens editor and hides quick bar","clipboard tests do not modify system clipboard","screenshot copies PNG, shows quick bar only, and preserves clipboard on cancellation","quick panel position persists across defaults instances","offscreen panel is constrained to a visible display","negative-coordinate display placement","invalid position falls back safely","scroll stitch exact overlap and partial final step","scroll stitch pixel-exact output","scroll unchanged and incompatible frames rejected","scroll unrelated content rejected"],"quick_panel_origin":[self.panel.frame.minX,self.panel.frame.minY],"ocr":recognized]
+        let result:[String:Any]=["status":"PASS","png_dimensions":[bitmap.pixelsWide,bitmap.pixelsHigh],"checks":["focused editor Command-V A C route through isolated pasteboard","text focus and inactive editor do not invoke image shortcuts","whole-image selection stays out of export and non-image paste is ignored","PNG export","JPEG export","opaque redaction pixels","undo","redo","zoom preserves export dimensions","rotation 90 180 270 pixel direction and undo annotations","rotation all integer angles 1 to 359 and white corners","rotation 360 no-op invalid angles and image-size limit","rotation fractional signed angle preview validation and custom background","rotation auto crop geometry and corner pixels","eight canvas edges crop and expand at three zoom levels","canvas resize preserves source pixels and fills white","canvas resize undo restores annotations and redo","canvas resize Escape and right-click cancellation and size limits","pointer zoom anchors across fit and scroll transitions","pointer zoom limits and unchanged export or annotations","Vision OCR","annotation hit testing","object move","arrow endpoint editing","four shape resize types","selection excluded from export","style editing","delete and undo/redo","pen text step movement","right click/drag/release cancel without capture","left drag confirms region","Escape cancels region","multi-display capture coordinates","per-display overlay coordinates for cross-screen and negative origins","window right-click cancellation","left click confirms selected window","frontmost window hit testing","window selected area retains nonzero alpha","region selected area retains nonzero alpha","empty and text clipboard rejected without replacing image","PNG and TIFF clipboard import preserves pixel dimensions","clipboard import opens editor and hides quick bar","clipboard tests do not modify system clipboard","screenshot copies PNG, shows quick bar only, and preserves clipboard on cancellation","single-instance lock excludes a second process and releases for restart","quick panel position persists across defaults instances","offscreen panel is constrained to a visible display","negative-coordinate display placement","invalid position falls back safely","scroll stitch exact overlap and partial final step","scroll stitch pixel-exact output","scroll unchanged and incompatible frames rejected","scroll unrelated content rejected"],"quick_panel_origin":[self.panel.frame.minX,self.panel.frame.minY],"ocr":recognized]
         let report=try! JSONSerialization.data(withJSONObject:result,options:[.prettyPrinted,.sortedKeys])
         try! report.write(to:URL(fileURLWithPath:path+".json"))
         if CommandLine.arguments.contains("--test-exit") {NSApp.terminate(nil)}}}
 }
+if let i=CommandLine.arguments.firstIndex(of:"--instance-lock-probe"),CommandLine.arguments.count>i+1 {
+    let probe=InstanceLock(path:CommandLine.arguments[i+1])
+    withExtendedLifetime(probe){exit(probe == nil ? 3:0)}
+}
+let singleton=SingleInstance()
+guard singleton.claim() else{exit(0)}
 let app=NSApplication.shared
 let delegate=App()
 app.delegate=delegate

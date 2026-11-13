@@ -41,6 +41,26 @@ final class EditorCommandButton:NSButton {
     }
 }
 
+final class ImageEditorWindow:NSWindow {
+    var shortcut:((String)->Bool)?
+    var canShortcut:((String)->Bool)?
+    var imageShortcutFocus:Bool {
+        isKeyWindow && isVisible && NSApp.isActive && NSApp.modalWindow==nil && !(firstResponder is NSText) && !(firstResponder is NSTextField)
+    }
+    override func performKeyEquivalent(with event:NSEvent)->Bool {
+        let flags=event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock,.numericPad,.function])
+        if imageShortcutFocus,flags == .command,let key=event.charactersIgnoringModifiers?.lowercased(),["a","c","v"].contains(key),shortcut?(key)==true{return true}
+        return super.performKeyEquivalent(with:event)
+    }
+    @objc func paste(_ sender:Any?){if imageShortcutFocus {_=shortcut?("v")}}
+    @objc func copy(_ sender:Any?){if imageShortcutFocus {_=shortcut?("c")}}
+    override func selectAll(_ sender:Any?){if imageShortcutFocus {_=shortcut?("a")}}
+    override func validateUserInterfaceItem(_ item:NSValidatedUserInterfaceItem)->Bool {
+        let keys:[Selector:String]=[#selector(paste(_:)):"v",#selector(copy(_:)):"c",#selector(selectAll(_:)):"a"]
+        if let key=item.action.flatMap({keys[$0]}) {return imageShortcutFocus && canShortcut?(key)==true}
+        return super.validateUserInterfaceItem(item)
+    }
+}
 final class EditorScrollView: NSScrollView {
     var didLayout: (() -> Void)?
     var zoomAtPointer: ((CGFloat, NSPoint) -> Void)?
@@ -58,6 +78,26 @@ final class EditorScrollView: NSScrollView {
     override func layout() {super.layout();didLayout?()}
 }
 extension App {
+    func canEditorImageShortcut(_ key:String,to pasteboard:NSPasteboard = .general)->Bool {
+        guard !capturing,!recordingBusy,NSApp.modalWindow==nil else{return false}
+        switch key {
+        case "v":return NSImage.canInit(with:pasteboard)
+        case "a":return canvas.image != nil
+        case "c":return canvas.image != nil && canvas.imageSelected
+        default:return false
+        }
+    }
+    @discardableResult func editorImageShortcut(_ key:String,to pasteboard:NSPasteboard = .general)->Bool {
+        guard canEditorImageShortcut(key,to:pasteboard) else{return false}
+        switch key {
+        case "v":return importImage(from:pasteboard)
+        case "a":canvas.selectWholeImage();window.makeFirstResponder(canvas);return true
+        case "c":
+            guard let png=canvas.imageData() else{return false}
+            pasteboard.clearContents();return pasteboard.setData(png,forType:.png)
+        default:return false
+        }
+    }
     func commandHint(_ action:Selector,_ title:String)->String {
         switch action {
         case #selector(openImage):return L("打开图片 · ⌘O")
@@ -81,7 +121,9 @@ extension App {
         }
     }
     func buildEditorWindow() {
-        window=NSWindow(contentRect:NSRect(x:0,y:0,width:Localizer.isEnglish ? 1248:1120,height:760),styleMask:[.titled,.closable,.miniaturizable,.resizable],backing:.buffered,defer:false)
+        window=ImageEditorWindow(contentRect:NSRect(x:0,y:0,width:Localizer.isEnglish ? 1248:1120,height:760),styleMask:[.titled,.closable,.miniaturizable,.resizable],backing:.buffered,defer:false)
+        (window as? ImageEditorWindow)?.shortcut={ [weak self] key in self?.editorImageShortcut(key) ?? false }
+        (window as? ImageEditorWindow)?.canShortcut={ [weak self] key in self?.canEditorImageShortcut(key) ?? false }
         window.title=L("轻截 · 图片编辑器");window.minSize=NSSize(width:Localizer.isEnglish ? 1248:1092,height:560);window.center();window.delegate=self;window.isReleasedWhenClosed=false;window.appearance=NSAppearance(named:.aqua)
         let root=NSStackView();root.orientation = .vertical;root.spacing=0;root.alignment = .leading;window.contentView=root
         func command(_ title:String,_ symbol:String,_ action:Selector)->NSButton {

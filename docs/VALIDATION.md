@@ -65,3 +65,15 @@ Build 52 passes 48 self-test checks. A named pasteboard test exercises the share
 ## v0.6.34 quick bar after capture (local)
 
 Build 53 passes 48 self-test checks. The shared screenshot completion check verifies that copying valid PNG data to an isolated pasteboard shows only the quick capture bar, leaves the editor image intact, and opens no success dialog. Live capture and cross-app focus were not retested.
+
+## v0.6.35 region overlay recovery (local)
+
+Inspected the reported stuck v0.6.34 state: a region-selection window was present and Escape restored the quick capture bar. Display diagnostics initially showed a 1470×956 primary and 1920×1080 secondary, then only the primary during isolated UI verification. Region capture now creates one non-hiding modal-capable overlay per display, maintains global drag coordinates, and cancels on display reconfiguration. An isolated UI check observed the primary-display prompt and successful Escape recovery; two simultaneously connected displays and physical-mouse capture have not been revalidated. Build 54 passes 49 checks, including cross-display overlay intersections, negative-origin Quartz mapping, cancellation and isolated clipboard completion. The running user application was preserved during installation.
+
+## v0.6.36 single instance (local)
+
+Build 55 passes 50 self-test checks. An independent child process verifies that a held instance lock rejects a second owner and a subsequent process can acquire it after release. Ordinary launches use a per-user, per-bundle file lock before constructing the application UI and registering shortcuts; later launches notify/reopen the existing instance. Self-tests bypass the ordinary instance gate and use isolated test locks. Live duplicate-launch foreground handoff has not been manually accepted. Older already-running binaries do not gain the lock until fully quit and restarted; installation preserves the existing user process.
+
+## v0.6.37 focused editor shortcuts (local)
+
+Build 56 passes 53 self-test checks. Synthetic Command-V/A/C key equivalents exercise an isolated named pasteboard through the key editor window, verify whole-image selection and identical PNG export without selection borders, and retain the canvas on non-image paste. Separate text-view and other-window focus tests verify that image actions do not run. Prior edit/capture/rotation/single-instance tests remain passing. System clipboard contents are not changed by the tests. Physical keyboard acceptance in the installed application remains pending.

@@ -55,6 +55,7 @@ final class Canvas: NSView {
     var ink: NSColor = .systemRed
     var stroke: CGFloat = 4
     var history: [Snapshot] = [], future: [Snapshot] = []
+    private(set) var imageSelected=false
     var selectedIndex: Int?
     var selectedMark: Mark? {guard let i=selectedIndex,marks.indices.contains(i) else{return nil};return marks[i]}
     private var dragOriginal: Mark?
@@ -171,8 +172,8 @@ final class Canvas: NSView {
             }
         }
     }
-    func clearSelection() {canvasResize=nil;selectedIndex=nil;dragOriginal=nil;dragHandle=nil;dragCheckpoint=false;needsDisplay=true}
-    func selectMark(_ index:Int?) {selectedIndex=index;if let m=selectedMark {ink=m.color;stroke=m.width};needsDisplay=true;changed?()}
+    func clearSelection() {imageSelected=false;canvasResize=nil;selectedIndex=nil;dragOriginal=nil;dragHandle=nil;dragCheckpoint=false;needsDisplay=true}
+    func selectMark(_ index:Int?) {imageSelected=false;selectedIndex=index;if let m=selectedMark {ink=m.color;stroke=m.width};needsDisplay=true;changed?()}
     func beginObjectDrag(at p:NSPoint)->Bool {
         let tolerance=8/max(0.01,viewScale)
         var handle:Int?
@@ -208,7 +209,11 @@ final class Canvas: NSView {
         else if event.keyCode == 53 {clearSelection();draft=nil;changed?()}
         else {super.keyDown(with:event)}
     }
+    func selectWholeImage(){guard image != nil else{return};clearSelection();draft=nil;imageSelected=true;needsDisplay=true}
     func drawSelection() {
+        if imageSelected {
+            NSColor.systemBlue.setStroke();let outline=NSBezierPath(rect:imageRect.insetBy(dx:1,dy:1));outline.lineWidth=2;outline.setLineDash([6,4],count:2,phase:0);outline.stroke();return
+        }
         guard let m=selectedMark else{return}
         func viewPoint(_ p:NSPoint)->NSPoint {NSPoint(x:imageRect.minX+p.x*viewScale,y:imageRect.minY+p.y*viewScale)}
         NSGraphicsContext.saveGraphicsState()

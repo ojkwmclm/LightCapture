@@ -104,6 +104,7 @@ final class RegionView: NSView {
     var confirmationFormat="%@ × %@ 点 · 松开鼠标确认 · Esc 取消"
     var cancelWithRightMouse=false
     var minimumSelectionSize:CGFloat=16
+    var screenshotMouseInput:((NSEvent)->Void)?
     private var completed=false
     var start: NSPoint?
     var selection: CGRect?
@@ -123,30 +124,74 @@ final class RegionView: NSView {
         let attrs:[NSAttributedString.Key:Any]=[.font:NSFont.systemFont(ofSize:18,weight:.semibold),.foregroundColor:NSColor.white,.backgroundColor:NSColor.black.withAlphaComponent(0.75)]
         text.draw(at:NSPoint(x:max(20,(bounds.width-text.size(withAttributes:attrs).width)/2),y:32),withAttributes:attrs)
     }
-    override func mouseDown(with event:NSEvent){guard !completed else{return};start=convert(event.locationInWindow,from:nil);selection=nil}
-    override func mouseDragged(with event:NSEvent){guard !completed,let start else{return};let p=convert(event.locationInWindow,from:nil);selection=CGRect(x:min(start.x,p.x),y:min(start.y,p.y),width:abs(start.x-p.x),height:abs(start.y-p.y)).intersection(bounds);needsDisplay=true}
-    override func mouseUp(with event:NSEvent){guard !completed else{return};guard let selection,selection.width>=minimumSelectionSize,selection.height>=minimumSelectionSize else{start=nil;selection=nil;needsDisplay=true;return};finishSelection(selection.integral)}
+    override func mouseDown(with event:NSEvent){if let screenshotMouseInput{screenshotMouseInput(event);return};guard !completed else{return};start=convert(event.locationInWindow,from:nil);selection=nil}
+    override func mouseDragged(with event:NSEvent){if let screenshotMouseInput{screenshotMouseInput(event);return};guard !completed,let start else{return};let p=convert(event.locationInWindow,from:nil);selection=CGRect(x:min(start.x,p.x),y:min(start.y,p.y),width:abs(start.x-p.x),height:abs(start.y-p.y)).intersection(bounds);needsDisplay=true}
+    override func mouseUp(with event:NSEvent){if let screenshotMouseInput{screenshotMouseInput(event);return};guard !completed else{return};guard let selection,selection.width>=minimumSelectionSize,selection.height>=minimumSelectionSize else{start=nil;selection=nil;needsDisplay=true;return};finishSelection(selection.integral)}
     func finishSelection(_ rect:CGRect?) {guard !completed else{return};completed=true;finished?(rect)}
     override func rightMouseDown(with event:NSEvent){if cancelWithRightMouse{finishSelection(nil)}else{super.rightMouseDown(with:event)}}
     override func rightMouseDragged(with event:NSEvent){if cancelWithRightMouse{finishSelection(nil)}else{super.rightMouseDragged(with:event)}}
     override func rightMouseUp(with event:NSEvent){if cancelWithRightMouse{finishSelection(nil)}else{super.rightMouseUp(with:event)}}
     override func keyDown(with event:NSEvent){if event.keyCode==53{finishSelection(nil)}else{super.keyDown(with:event)}}
     static func chooseScreenshot()->CGRect? {
-        guard let first=NSScreen.screens.first else{return nil}
-        let desktop=NSScreen.screens.dropFirst().reduce(first.frame){$0.union($1.frame)}
-        let panel=RegionPanel(contentRect:desktop,styleMask:.borderless,backing:.buffered,defer:false)
-        panel.isMovable=false;panel.title=L("选择截图区域");panel.isOpaque=false;panel.backgroundColor = .clear;panel.level = .screenSaver;panel.collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary];panel.isReleasedWhenClosed=false
-        let view=RegionView(frame:NSRect(origin:.zero,size:desktop.size));view.cancelWithRightMouse=true;view.minimumSelectionSize=2
-        view.prompt=L("左键拖选并松开截图 · 右键 / Esc 取消")
-        view.confirmationFormat="%@ × %@ 点 · 松开左键截图 · 右键 / Esc 取消"
-        panel.contentView=view
-        var selected:CGRect?
-        view.finished={rect in
-            if let rect {selected=screenCaptureRect(rect,desktop:desktop,mainTop:first.frame.maxY)}
-            NSApp.stopModal(withCode:rect == nil ? .cancel:.OK);panel.orderOut(nil)
+        let screens=NSScreen.screens
+        guard let first=screens.first else{return nil}
+        // A single window spanning displays is unreliable with separate Spaces.
+        // Each display gets its own persistent overlay; selection stays global.
+        let entries=screens.map {screen -> (RegionPanel,RegionView) in
+            let panel=RegionPanel(contentRect:screen.frame,styleMask:.borderless,backing:.buffered,defer:false)
+            panel.isMovable=false;panel.title=L("选择截图区域");panel.isOpaque=false;panel.backgroundColor = .clear
+            panel.level = .screenSaver;panel.hidesOnDeactivate=false;panel.worksWhenModal=true;panel.ignoresMouseEvents=false
+            panel.collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary];panel.isReleasedWhenClosed=false
+            panel.animationBehavior = .none;panel.isRestorable=false
+            let view=RegionView(frame:NSRect(origin:.zero,size:screen.frame.size))
+            view.cancelWithRightMouse=true;view.minimumSelectionSize=2
+            view.prompt=L("左键拖选并松开截图 · 右键 / Esc 取消")
+            view.confirmationFormat="%@ × %@ 点 · 松开左键截图 · 右键 / Esc 取消"
+            panel.contentView=view
+            return (panel,view)
         }
-        NSApp.activate(ignoringOtherApps:true);panel.makeKeyAndOrderFront(nil);panel.makeFirstResponder(view)
-        NSApp.runModal(for:panel);panel.close();return selected
+        var selected:CGRect?,start:NSPoint?,completed=false
+        func finish(_ rect:CGRect?) {
+            guard !completed else{return};completed=true
+            if let rect {selected=quartzRect(rect,mainTop:first.frame.maxY)}
+            NSApp.stopModal(withCode:rect == nil ? .cancel:.OK)
+            for (panel,_) in entries {panel.orderOut(nil)}
+        }
+        for (panel,view) in entries {
+            view.finished={_ in finish(nil)}
+            view.screenshotMouseInput={event in
+                guard !completed else{return}
+                let point=panel.convertPoint(toScreen:event.locationInWindow)
+                if event.type == .leftMouseDown {start=point}
+                guard let start else{return}
+                let rect=CGRect(x:min(start.x,point.x),y:min(start.y,point.y),width:abs(start.x-point.x),height:abs(start.y-point.y))
+                for (overlay,view) in entries {
+                    view.selection=overlayRect(rect,frame:overlay.frame).intersection(view.bounds)
+                    view.needsDisplay=true
+                }
+                if event.type == .leftMouseUp {
+                    if rect.width>=2 && rect.height>=2 {finish(rect)}else{
+                        for (_,view) in entries {view.selection=nil;view.needsDisplay=true}
+                    }
+                }
+            }
+        }
+        let observer=NotificationCenter.default.addObserver(forName:NSApplication.didChangeScreenParametersNotification,object:nil,queue:.main){_ in finish(nil)}
+        defer{NotificationCenter.default.removeObserver(observer)}
+        let mouse=NSEvent.mouseLocation
+        let active=entries.first(where:{$0.0.frame.contains(mouse)}) ?? entries[0]
+        NSApp.activate(ignoringOtherApps:true)
+        for (panel,view) in entries {panel.orderFrontRegardless();panel.displayIfNeeded();panel.makeFirstResponder(view)}
+        active.0.makeKeyAndOrderFront(nil);active.0.makeFirstResponder(active.1)
+        if !completed {NSApp.runModal(for:active.0)}
+        for (panel,view) in entries {view.screenshotMouseInput=nil;view.finished=nil;panel.close()}
+        return selected
+    }
+    static func quartzRect(_ rect:CGRect,mainTop:CGFloat)->CGRect {
+        CGRect(x:rect.minX,y:mainTop-rect.maxY,width:rect.width,height:rect.height).integral
+    }
+    static func overlayRect(_ rect:CGRect,frame:CGRect)->CGRect {
+        CGRect(x:rect.minX-frame.minX,y:frame.maxY-rect.maxY,width:rect.width,height:rect.height)
     }
     static func screenCaptureRect(_ rect:CGRect,desktop:CGRect,mainTop:CGFloat)->CGRect {
         CGRect(x:desktop.minX+rect.minX,y:mainTop-desktop.maxY+rect.minY,width:rect.width,height:rect.height).integral

@@ -33,6 +33,10 @@ Screen Recording and Accessibility access are required. Keep the target window s
 
 In local v0.6.34, successful region, window, full-screen and scrolling captures copy to the clipboard and show the quick capture bar, without a success prompt or opening the editor. Paste in the destination app with ⌘V, or import the image from the clipboard in LightCapture to annotate it.
 
+Local v0.6.36 uses one ordinary instance per user and app identity. Reopening wakes the existing process and preserves an active capture or dialog; otherwise it shows the quick bar. Fully quit older instances before the first launch after updating.
+
+When the image editor is the focused window, Command-V imports a clipboard image; Command-A selects the whole image and Command-C copies it with annotations. Text fields retain standard text shortcuts. Empty canvases cannot be selected and non-image clipboard contents do not replace the canvas.
+
 ## Shortcuts
 
 | Action | Shortcut |
