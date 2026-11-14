@@ -77,3 +77,7 @@ Build 55 passes 50 self-test checks. An independent child process verifies that 
 ## v0.6.37 focused editor shortcuts (local)
 
 Build 56 passes 53 self-test checks. Synthetic Command-V/A/C key equivalents exercise an isolated named pasteboard through the key editor window, verify whole-image selection and identical PNG export without selection borders, and retain the canvas on non-image paste. Separate text-view and other-window focus tests verify that image actions do not run. Prior edit/capture/rotation/single-instance tests remain passing. System clipboard contents are not changed by the tests. Physical keyboard acceptance in the installed application remains pending.
+
+## v0.6.38 direct copy (local)
+
+Build 57 passes 54 self-test checks. Command-C copies the full annotated PNG in a focused editor even with whole-image selection cleared; empty-canvas copy remains unavailable. Existing text-input and inactive-editor guards remain tested. The focus-dependent test waits for AppKit activation before assertions. All clipboard tests use a named pasteboard rather than the system clipboard. Physical keyboard acceptance remains pending.

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.6.38 (local build)
+
+- Allow Command-C to copy the entire annotated image whenever the editor is focused and contains an image, without requiring Select All. Text input retains standard copy behaviour.
+
 ## v0.6.37 (local build)
 
 - Add focused-editor Command-V to import clipboard images and Command-A to select the whole image, then Command-C to copy the annotated image.

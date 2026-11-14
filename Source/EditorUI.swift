@@ -83,7 +83,7 @@ extension App {
         switch key {
         case "v":return NSImage.canInit(with:pasteboard)
         case "a":return canvas.image != nil
-        case "c":return canvas.image != nil && canvas.imageSelected
+        case "c":return canvas.image != nil
         default:return false
         }
     }
