@@ -81,3 +81,7 @@ Build 56 passes 53 self-test checks. Synthetic Command-V/A/C key equivalents exe
 ## v0.6.38 direct copy (local)
 
 Build 57 passes 54 self-test checks. Command-C copies the full annotated PNG in a focused editor even with whole-image selection cleared; empty-canvas copy remains unavailable. Existing text-input and inactive-editor guards remain tested. The focus-dependent test waits for AppKit activation before assertions. All clipboard tests use a named pasteboard rather than the system clipboard. Physical keyboard acceptance remains pending.
+
+## v0.6.39 focused window capture (local)
+
+Build 58 passes 55 assertion-enabled self-test checks and verifies its ad-hoc signature. Target-selection tests cover foreground application ownership, ignoring the capture bar, editor self-capture, transparent/tiny windows, focused bounds matching behind another window, and focused floating windows. Window capture now uses the selected window ID with screencapture rather than opening a picker. Existing Accessibility permission is used when available to match focused-window bounds; otherwise the frontmost normal window belonging to the foreground application is used. No new Accessibility prompt is requested. The tests use synthetic window metadata and isolated pasteboards; live focused-window capture remains pending user acceptance. Installation preserves the existing user process, so fully quitting and reopening is required to use the new build.

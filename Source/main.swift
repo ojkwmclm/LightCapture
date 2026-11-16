@@ -3,6 +3,7 @@ import Vision
 import Carbon
 import UniformTypeIdentifiers
 import ImageIO
+import ApplicationServices
 
 enum ScreenshotSurface { case editor, quickBar, none }
 
@@ -38,6 +39,48 @@ enum PanelPlacement {
     }
 }
 
+enum FocusedWindowCapture {
+    static func focusedBounds(of pid:pid_t?)->CGRect? {
+        guard let pid,AXIsProcessTrusted() else{return nil}
+        let application=AXUIElementCreateApplication(pid)
+        var window:CFTypeRef?
+        guard AXUIElementCopyAttributeValue(application,kAXFocusedWindowAttribute as CFString,&window) == .success,
+              let window,CFGetTypeID(window)==AXUIElementGetTypeID() else{return nil}
+        let element=unsafeBitCast(window,to:AXUIElement.self)
+        var position:CFTypeRef?,size:CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element,kAXPositionAttribute as CFString,&position) == .success,
+              AXUIElementCopyAttributeValue(element,kAXSizeAttribute as CFString,&size) == .success,
+              let position,let size,CFGetTypeID(position)==AXValueGetTypeID(),CFGetTypeID(size)==AXValueGetTypeID() else{return nil}
+        var point=CGPoint.zero,dimensions=CGSize.zero
+        guard AXValueGetValue(unsafeBitCast(position,to:AXValue.self),.cgPoint,&point),
+              AXValueGetValue(unsafeBitCast(size,to:AXValue.self),.cgSize,&dimensions) else{return nil}
+        return CGRect(origin:point,size:dimensions)
+    }
+    static func target(in windows:[[String:Any]],preferredPID:pid_t?,ownPID:pid_t,editorID:CGWindowID?,focusedBounds:CGRect?=nil)->CGWindowID? {
+        let candidates=windows.filter {item in
+            guard let layer=item[kCGWindowLayer as String] as? Int,
+                  layer==0 || (focusedBounds != nil && layer>0 && layer<20),
+                  (item[kCGWindowAlpha as String] as? Double ?? 1)>0.01,
+                  let bounds=item[kCGWindowBounds as String] as? NSDictionary,
+                  let rect=CGRect(dictionaryRepresentation:bounds),rect.width>=16,rect.height>=16 else{return false}
+            return true
+        }
+        if let editorID {return candidates.first{($0[kCGWindowNumber as String] as? NSNumber)?.uint32Value==editorID}.flatMap{($0[kCGWindowNumber as String] as? NSNumber)?.uint32Value}}
+        let target=candidates.first{item in
+            let pid=(item[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value
+            if let preferredPID {
+                guard pid==preferredPID && pid != ownPID else{return false}
+                if let focusedBounds,let b=item[kCGWindowBounds as String] as? NSDictionary,let rect=CGRect(dictionaryRepresentation:b) {
+                    return abs(rect.minX-focusedBounds.minX)<2 && abs(rect.minY-focusedBounds.minY)<2 && abs(rect.width-focusedBounds.width)<2 && abs(rect.height-focusedBounds.height)<2
+                }
+                return true
+            }
+            return pid != ownPID
+        }
+        return (target?[kCGWindowNumber as String] as? NSNumber)?.uint32Value
+    }
+}
+
 final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation {
     var editorRotate:NSButton?
     var editorColor:NSColorWell?
@@ -60,6 +103,8 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
     var clipboardTimer:Timer?
     var screenObserver:NSObjectProtocol?
     var instanceObserver:NSObjectProtocol?
+    var frontmostObserver:NSObjectProtocol?
+    var lastExternalApp:NSRunningApplication?
     var clipboardChangeCount = -1
     var clipboardContainsImage=false
     var editorScroll: EditorScrollView!
@@ -73,6 +118,10 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
     var restoreQuickAfterRecording=false
     var recordingBusy=false
     func applicationDidFinishLaunching(_ note:Notification) {
+        if let front=NSWorkspace.shared.frontmostApplication,front.processIdentifier != getpid(){lastExternalApp=front}
+        frontmostObserver=NSWorkspace.shared.notificationCenter.addObserver(forName:NSWorkspace.didActivateApplicationNotification,object:nil,queue:.main){[weak self] note in
+            if let front=note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,front.processIdentifier != getpid(){self?.lastExternalApp=front}
+        }
         instanceObserver=DistributedNotificationCenter.default().addObserver(forName:SingleInstance.wakeNotification,object:nil,queue:.main){[weak self] note in
             guard (note.userInfo?["bundleIdentifier"] as? String)==(Bundle.main.bundleIdentifier ?? "local.lightcapture.app"),
                   note.object == nil || (note.object as? String)==String(getpid()) else{return}
@@ -210,7 +259,17 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         for (index,key) in [UInt32(kVK_ANSI_2),UInt32(kVK_ANSI_3),UInt32(kVK_ANSI_4)].enumerated() {var ref:EventHotKeyRef?;let result=RegisterEventHotKey(key,UInt32(cmdKey|optionKey),EventHotKeyID(signature:0x4c434150,id:UInt32(index+1)),GetApplicationEventTarget(),0,&ref);hotkeys.append(ref);if result != noErr {statusLabel.stringValue=L("部分快捷键被占用，可使用菜单栏截图")}}
     }
     @objc func region(){chooseCaptureRect {RegionView.chooseScreenshot()}}
-    @objc func captureWindow(){chooseCaptureRect {WindowCaptureView.choose()}}
+    @objc func captureWindow(){
+        guard !capturing,!recordingBusy,scrollCapture==nil,NSApp.modalWindow==nil else{return}
+        let front=NSWorkspace.shared.frontmostApplication
+        let external=front?.processIdentifier != getpid() ? front:lastExternalApp
+        let editorID:CGWindowID?=(front?.processIdentifier==getpid() && window.isVisible && window.isKeyWindow) ? CGWindowID(window.windowNumber):nil
+        let windows=CGWindowListCopyWindowInfo([.optionOnScreenOnly,.excludeDesktopElements],kCGNullWindowID) as? [[String:Any]] ?? []
+        guard let id=FocusedWindowCapture.target(in:windows,preferredPID:external?.isTerminated == false ? external?.processIdentifier:nil,ownPID:getpid(),editorID:editorID,focusedBounds:editorID == nil ? FocusedWindowCapture.focusedBounds(of:external?.processIdentifier):nil) else {
+            message(L("窗口截图"),L("当前应用没有可截图的窗口。"));return
+        }
+        capture(["-l",String(id),"-o"],returnFocusTo:editorID == nil ? external:nil,preservingWindowID:editorID)
+    }
     var screenshotSurface:ScreenshotSurface {
         if window.isVisible {return .editor}
         return panel.isVisible ? .quickBar:.none
@@ -234,17 +293,22 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         }
     }
     @objc func full(){capture(["-m"])}
-    func capture(_ flags:[String],restoring surface:ScreenshotSurface?=nil,returnFocusTo foreground:NSRunningApplication?=nil) {
+    func capture(_ flags:[String],restoring surface:ScreenshotSurface?=nil,returnFocusTo foreground:NSRunningApplication?=nil,preservingWindowID:CGWindowID?=nil) {
         guard !capturing else{return}
         let previous=surface ?? screenshotSurface
-        capturing=true;window.orderOut(nil);panel.orderOut(nil)
+        capturing=true
+        if preservingWindowID != CGWindowID(window.windowNumber){window.orderOut(nil)}
+        panel.orderOut(nil)
         let url=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString+".png")
         DispatchQueue.main.asyncAfter(deadline:.now()+0.3) {
             let p=Process();p.executableURL=URL(fileURLWithPath:"/usr/sbin/screencapture");p.arguments=["-x"]+flags+[url.path];p.standardError=FileHandle.nullDevice
             p.terminationHandler={process in
                 let png=process.terminationStatus == 0 ? try? Data(contentsOf:url):nil
                 try? FileManager.default.removeItem(at:url)
-                DispatchQueue.main.async {self.finishScreenshot(png,restoring:previous,returnFocusTo:foreground)}
+                DispatchQueue.main.async {
+                    if preservingWindowID != nil {self.window.orderOut(nil)}
+                    self.finishScreenshot(png,restoring:previous,returnFocusTo:foreground)
+                }
             }
             do{try p.run()}catch{self.finishScreenshot(nil,restoring:previous);self.error(error)}
         }
@@ -389,7 +453,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         let icon=NSImageView();icon.image=NSApp.applicationIconImage;icon.imageScaling = .scaleProportionallyUpOrDown;icon.setAccessibilityLabel(L("轻截"))
         NSLayoutConstraint.activate([icon.widthAnchor.constraint(equalToConstant:64),icon.heightAnchor.constraint(equalToConstant:64)])
         root.addArrangedSubview(icon)
-        let title=NSTextField(labelWithString:L("轻截 LightCapture 0.6.38"));title.font = .systemFont(ofSize:15,weight:.bold)
+        let title=NSTextField(labelWithString:L("轻截 LightCapture 0.6.39"));title.font = .systemFont(ofSize:15,weight:.bold)
         let text=NSTextField(wrappingLabelWithString:L("区域／窗口／全屏：⌥⌘2／4／3\n图片复制：⇧⌘C；保存：⌘S\n截图与录屏需在系统设置中允许屏幕录制。"));text.font = .systemFont(ofSize:13);text.preferredMaxLayoutWidth=292
         root.addArrangedSubview(title);root.addArrangedSubview(text)
         let ok=NSButton(title:L("好"),target:self,action:#selector(dismissAbout));ok.bezelStyle = .rounded;ok.keyEquivalent="\r";root.addArrangedSubview(ok)
@@ -457,6 +521,22 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         assert(RegionView.overlayRect(cross,frame:secondary).intersection(CGRect(origin:.zero,size:secondary.size))==CGRect(x:0,y:656,width:130,height:200))
         assert(RegionView.quartzRect(cross,mainTop:956)==CGRect(x:1400,y:656,width:200,height:200))
         assert(RegionView.quartzRect(CGRect(x:-500,y:1000,width:200,height:100),mainTop:956)==CGRect(x:-500,y:-144,width:200,height:100))
+    }
+    func testFocusedWindowTarget(){
+        func item(_ id:Int,_ pid:Int,_ layer:Int=0,_ alpha:Double=1,_ width:Int=400)->[String:Any]{
+            [kCGWindowNumber as String:id,kCGWindowOwnerPID as String:pid,kCGWindowLayer as String:layer,kCGWindowAlpha as String:alpha,kCGWindowBounds as String:["X":0,"Y":0,"Width":width,"Height":300]]
+        }
+        let windows=[item(1,30,3),item(2,10),item(3,20),item(4,20),item(5,30)]
+        assert(FocusedWindowCapture.target(in:windows,preferredPID:20,ownPID:30,editorID:nil)==3)
+        assert(FocusedWindowCapture.target(in:windows,preferredPID:nil,ownPID:30,editorID:nil)==2)
+        assert(FocusedWindowCapture.target(in:windows,preferredPID:99,ownPID:30,editorID:nil)==nil)
+        assert(FocusedWindowCapture.target(in:windows,preferredPID:20,ownPID:30,editorID:5)==5)
+        assert(FocusedWindowCapture.target(in:[item(6,20,0,0),item(7,20,0,1,1),item(8,20)],preferredPID:20,ownPID:30,editorID:nil)==8)
+        let focused=CGRect(x:0,y:0,width:500,height:300)
+        let layered=[item(9,10,8,1,500),item(10,20),item(11,20,8,1,500)]
+        assert(FocusedWindowCapture.target(in:layered,preferredPID:20,ownPID:30,editorID:nil,focusedBounds:focused)==11)
+        assert(FocusedWindowCapture.target(in:layered,preferredPID:20,ownPID:30,editorID:nil)==10)
+        assert(FocusedWindowCapture.target(in:windows,preferredPID:20,ownPID:30,editorID:nil,focusedBounds:focused)==nil)
     }
     func testRegionCancellation(){
         func event(_ type:NSEvent.EventType,_ x:CGFloat=40,_ y:CGFloat=40)->NSEvent {
@@ -603,7 +683,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         prefs.set(["x":"invalid","y":2],forKey:PanelPlacement.key)
         assert(PanelPlacement.restore(size:size,screens:[screen],fallback:fallback,defaults:prefs)==fallback)
     }
-    func selfTest(){DispatchQueue.main.asyncAfter(deadline:.now()+0.4){self.testEditableObjects();self.testRegionCancellation();self.testRegionOverlayCoordinates();self.testWindowCancellation();self.testSelectionMouseSurface();self.testClipboardImport();self.testEditorImageShortcuts();self.testScreenshotClipboard();self.testPanelPlacement();testInstanceLock();testCanvasEdges();testImageRotation();testRotationAdjustment();testScrollStitcher();let image=NSImage(size:NSSize(width:800,height:500));image.lockFocusFlipped(true);NSColor.white.setFill();NSRect(x:0,y:0,width:800,height:500).fill();"LightCapture 轻截".draw(at:NSPoint(x:60,y:50),withAttributes:[.font:NSFont.systemFont(ofSize:40),.foregroundColor:NSColor.black]);NSColor.systemBlue.setFill();NSRect(x:80,y:180,width:240,height:130).fill();image.unlockFocus();self.canvas.setImage(self.normalized(image)!);self.canvas.checkpoint();self.canvas.marks=[Mark(tool:.arrow,points:[NSPoint(x:500,y:120),NSPoint(x:310,y:230)],color:.systemRed,width:5),Mark(tool:.redact,points:[NSPoint(x:440,y:300),NSPoint(x:650,y:350)],color:.black,width:4),Mark(tool:.text,points:[NSPoint(x:400,y:380)],color:.systemRed,width:4,text:"本机处理 / Local only")];let path=ProcessInfo.processInfo.environment["LIGHTCAPTURE_TEST_OUTPUT"] ?? "/tmp/lightcapture-selftest.png";try? self.canvas.imageData()?.write(to:URL(fileURLWithPath:path));self.canvas.undoEdit();assert(self.canvas.marks.isEmpty);self.canvas.redoEdit();assert(self.canvas.marks.count==3);self.statusLabel.stringValue="自检通过：绘制、导出、撤销、重做";let data=self.canvas.imageData()!
+    func selfTest(){DispatchQueue.main.asyncAfter(deadline:.now()+0.4){self.testEditableObjects();self.testRegionCancellation();self.testRegionOverlayCoordinates();self.testWindowCancellation();self.testFocusedWindowTarget();self.testSelectionMouseSurface();self.testClipboardImport();self.testEditorImageShortcuts();self.testScreenshotClipboard();self.testPanelPlacement();testInstanceLock();testCanvasEdges();testImageRotation();testRotationAdjustment();testScrollStitcher();let image=NSImage(size:NSSize(width:800,height:500));image.lockFocusFlipped(true);NSColor.white.setFill();NSRect(x:0,y:0,width:800,height:500).fill();"LightCapture 轻截".draw(at:NSPoint(x:60,y:50),withAttributes:[.font:NSFont.systemFont(ofSize:40),.foregroundColor:NSColor.black]);NSColor.systemBlue.setFill();NSRect(x:80,y:180,width:240,height:130).fill();image.unlockFocus();self.canvas.setImage(self.normalized(image)!);self.canvas.checkpoint();self.canvas.marks=[Mark(tool:.arrow,points:[NSPoint(x:500,y:120),NSPoint(x:310,y:230)],color:.systemRed,width:5),Mark(tool:.redact,points:[NSPoint(x:440,y:300),NSPoint(x:650,y:350)],color:.black,width:4),Mark(tool:.text,points:[NSPoint(x:400,y:380)],color:.systemRed,width:4,text:"本机处理 / Local only")];let path=ProcessInfo.processInfo.environment["LIGHTCAPTURE_TEST_OUTPUT"] ?? "/tmp/lightcapture-selftest.png";try? self.canvas.imageData()?.write(to:URL(fileURLWithPath:path));self.canvas.undoEdit();assert(self.canvas.marks.isEmpty);self.canvas.redoEdit();assert(self.canvas.marks.count==3);self.statusLabel.stringValue="自检通过：绘制、导出、撤销、重做";let data=self.canvas.imageData()!
         let bitmap=NSBitmapImageRep(data:data)!
         assert(bitmap.pixelsWide==Int(self.canvas.image!.size.width))
         let black=bitmap.colorAt(x:450,y:320)!.usingColorSpace(.deviceRGB)!
@@ -620,7 +700,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         try? VNImageRequestHandler(cgImage:bitmap.cgImage!).perform([request])
         let recognized=request.results?.compactMap{$0.topCandidates(1).first?.string}.joined(separator:"\n") ?? ""
         assert(recognized.contains("LightCapture"))
-        let result:[String:Any]=["status":"PASS","png_dimensions":[bitmap.pixelsWide,bitmap.pixelsHigh],"checks":["focused editor Command-V A C route through isolated pasteboard","Command-C copies without selection and rejects empty canvas","text focus and inactive editor do not invoke image shortcuts","whole-image selection stays out of export and non-image paste is ignored","PNG export","JPEG export","opaque redaction pixels","undo","redo","zoom preserves export dimensions","rotation 90 180 270 pixel direction and undo annotations","rotation all integer angles 1 to 359 and white corners","rotation 360 no-op invalid angles and image-size limit","rotation fractional signed angle preview validation and custom background","rotation auto crop geometry and corner pixels","eight canvas edges crop and expand at three zoom levels","canvas resize preserves source pixels and fills white","canvas resize undo restores annotations and redo","canvas resize Escape and right-click cancellation and size limits","pointer zoom anchors across fit and scroll transitions","pointer zoom limits and unchanged export or annotations","Vision OCR","annotation hit testing","object move","arrow endpoint editing","four shape resize types","selection excluded from export","style editing","delete and undo/redo","pen text step movement","right click/drag/release cancel without capture","left drag confirms region","Escape cancels region","multi-display capture coordinates","per-display overlay coordinates for cross-screen and negative origins","window right-click cancellation","left click confirms selected window","frontmost window hit testing","window selected area retains nonzero alpha","region selected area retains nonzero alpha","empty and text clipboard rejected without replacing image","PNG and TIFF clipboard import preserves pixel dimensions","clipboard import opens editor and hides quick bar","clipboard tests do not modify system clipboard","screenshot copies PNG, shows quick bar only, and preserves clipboard on cancellation","single-instance lock excludes a second process and releases for restart","quick panel position persists across defaults instances","offscreen panel is constrained to a visible display","negative-coordinate display placement","invalid position falls back safely","scroll stitch exact overlap and partial final step","scroll stitch pixel-exact output","scroll unchanged and incompatible frames rejected","scroll unrelated content rejected"],"quick_panel_origin":[self.panel.frame.minX,self.panel.frame.minY],"ocr":recognized]
+        let result:[String:Any]=["status":"PASS","png_dimensions":[bitmap.pixelsWide,bitmap.pixelsHigh],"checks":["focused editor Command-V A C route through isolated pasteboard","Command-C copies without selection and rejects empty canvas","text focus and inactive editor do not invoke image shortcuts","whole-image selection stays out of export and non-image paste is ignored","focused window target ignores capture bar and respects frontmost app and editor","PNG export","JPEG export","opaque redaction pixels","undo","redo","zoom preserves export dimensions","rotation 90 180 270 pixel direction and undo annotations","rotation all integer angles 1 to 359 and white corners","rotation 360 no-op invalid angles and image-size limit","rotation fractional signed angle preview validation and custom background","rotation auto crop geometry and corner pixels","eight canvas edges crop and expand at three zoom levels","canvas resize preserves source pixels and fills white","canvas resize undo restores annotations and redo","canvas resize Escape and right-click cancellation and size limits","pointer zoom anchors across fit and scroll transitions","pointer zoom limits and unchanged export or annotations","Vision OCR","annotation hit testing","object move","arrow endpoint editing","four shape resize types","selection excluded from export","style editing","delete and undo/redo","pen text step movement","right click/drag/release cancel without capture","left drag confirms region","Escape cancels region","multi-display capture coordinates","per-display overlay coordinates for cross-screen and negative origins","window right-click cancellation","left click confirms selected window","frontmost window hit testing","window selected area retains nonzero alpha","region selected area retains nonzero alpha","empty and text clipboard rejected without replacing image","PNG and TIFF clipboard import preserves pixel dimensions","clipboard import opens editor and hides quick bar","clipboard tests do not modify system clipboard","screenshot copies PNG, shows quick bar only, and preserves clipboard on cancellation","single-instance lock excludes a second process and releases for restart","quick panel position persists across defaults instances","offscreen panel is constrained to a visible display","negative-coordinate display placement","invalid position falls back safely","scroll stitch exact overlap and partial final step","scroll stitch pixel-exact output","scroll unchanged and incompatible frames rejected","scroll unrelated content rejected"],"quick_panel_origin":[self.panel.frame.minX,self.panel.frame.minY],"ocr":recognized]
         let report=try! JSONSerialization.data(withJSONObject:result,options:[.prettyPrinted,.sortedKeys])
         try! report.write(to:URL(fileURLWithPath:path+".json"))
         if CommandLine.arguments.contains("--test-exit") {NSApp.terminate(nil)}}}

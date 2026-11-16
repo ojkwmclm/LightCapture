@@ -11,6 +11,7 @@ enum Localizer {
         }
     }
     static let english: [String:String] = [
+        "当前应用没有可截图的窗口。":"The current application has no window available to capture.",
         "无法将截图复制到剪贴板。":"Unable to copy the screenshot to the clipboard.",
         "任意角度旋转":"Rotate by Any Angle",
         "旋转前":"Before",
@@ -205,7 +206,7 @@ enum Localizer {
         "窗口":"Window",
         "窗口截图":"Window Capture",
         "窗口截图   ⌥⌘4":"Window Capture   ⌥⌘4",
-        "窗口截图 · ⌥⌘4":"Capture a window · ⌥⌘4",
+        "窗口截图 · ⌥⌘4":"Capture the focused window · ⌥⌘4",
         "箭头":"Arrow",
         "粗":"Thick",
         "粘贴":"Paste",
@@ -226,7 +227,7 @@ enum Localizer {
         "请选择视频文件保存位置":"Choose where to save the video",
         "贴图":"Pin",
         "轻截":"LightCapture",
-        "轻截 LightCapture 0.6.38":"LightCapture 0.6.38",
+        "轻截 LightCapture 0.6.39":"LightCapture 0.6.39",
         "轻截 · 参考贴图":"LightCapture · Pinned Image",
         "轻截 · 图片编辑器":"LightCapture · Image Editor",
         "轻截 · 屏幕录制":"LightCapture · Screen Recording",

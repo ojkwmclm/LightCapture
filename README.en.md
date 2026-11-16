@@ -7,7 +7,7 @@ A compact screenshot, annotation and recording utility written in Swift / AppKit
 ## Features
 
 - Floating capture bar with clipboard import, window/region/primary-display capture, recording and editor controls.
-- Left-click a window or left-drag a region to capture; right-click or Escape cancels.
+- Window capture immediately captures the focused window. For region capture, left-drag to capture; right-click or Escape cancels.
 - Editable arrows, rectangles, ellipses, freehand strokes, highlights, text, step markers and opaque redaction. Move, resize, restyle, delete and undo/redo annotations.
 - PNG/JPEG/PDF export, image copy, crop, zoom, pinned references, manual vertical image combination and local Chinese/English OCR.
 - Region/window/display MP4 recording with system audio, microphone, both or neither. Reopen from the Dock to access Stop.
@@ -80,6 +80,6 @@ Clipboard tests use an isolated named pasteboard and do not write to the system 
 
 ## Limitations
 
-This is a 0.x release. Editable project files, recording pause, webcam overlays and video editing are not implemented. Image combination retains overlaps. Exports and cropping flatten annotations; crop supports undo. Window screenshots include visible overlaps. Full-screen screenshots currently use the primary display.
+This is a 0.x release. Editable project files, recording pause, webcam overlays and video editing are not implemented. Image combination retains overlaps. Exports and cropping flatten annotations; crop supports undo. Window capture directly captures the focused application window by ID, without a picker. Full-screen screenshots currently use the primary display.
 
 LightCapture independently implements a compact workflow inspired by FastStone Capture. It is not affiliated with FastStone and contains no FastStone binaries, resources or decompiled artifacts.

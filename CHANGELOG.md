@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.6.39 (local build)
+
+- Capture the focused application window directly without opening the window picker. Use focused-window accessibility bounds when permission already exists, otherwise frontmost application window order.
+- Capture the window by ID, ignore the capture bar, and preserve clipboard/quick-bar completion.
+
 ## v0.6.38 (local build)
 
 - Allow Command-C to copy the entire annotated image whenever the editor is focused and contains an image, without requiring Select All. Text input retains standard copy behaviour.
