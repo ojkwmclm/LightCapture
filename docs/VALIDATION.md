@@ -89,3 +89,7 @@ Build 58 passes 55 assertion-enabled self-test checks and verifies its ad-hoc si
 ## v0.6.40 annotation clipboard (local)
 
 Build 59 passes 57 assertion-enabled self-test checks. Synthetic Command-C/V/A events in the focused editor exercise eight annotation types (arrow, rectangle, oval, pen, highlight, text, step and redaction) through an isolated pasteboard. Copies retain geometry, colour including alpha, width and text; repeated pastes offset the editable object, preserve the source image and support single-step undo/redo. Command-A clears object selection and copies the complete annotated PNG without selection handles. Invalid annotation data and annotation paste into an empty canvas are rejected. Existing inactive-window and text-input shortcut guards remain tested. Toolbar Copy/Paste uses the same contextual actions; explicit Shift-Command-C retains full-image export. No system clipboard or user editor contents are modified by these tests. Physical keyboard and toolbar acceptance remains pending.
+
+## v0.6.41 permission settings shortcut (local)
+
+Build 60 compiles and its ad-hoc signature verifies. After the device-control reminder's modal OK action returns, the app opens the Privacy_Accessibility System Settings URL, corresponding to Device Control & Data Access on this Mac. No permission is changed by this action. Live settings navigation was not exercised because System Settings currently has an authentication dialog; no credentials were entered or permission state changed.

@@ -455,7 +455,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         let icon=NSImageView();icon.image=NSApp.applicationIconImage;icon.imageScaling = .scaleProportionallyUpOrDown;icon.setAccessibilityLabel(L("轻截"))
         NSLayoutConstraint.activate([icon.widthAnchor.constraint(equalToConstant:64),icon.heightAnchor.constraint(equalToConstant:64)])
         root.addArrangedSubview(icon)
-        let title=NSTextField(labelWithString:L("轻截 LightCapture 0.6.40"));title.font = .systemFont(ofSize:15,weight:.bold)
+        let title=NSTextField(labelWithString:L("轻截 LightCapture 0.6.41"));title.font = .systemFont(ofSize:15,weight:.bold)
         let text=NSTextField(wrappingLabelWithString:L("区域／窗口／全屏：⌥⌘2／4／3\n图片复制：⇧⌘C；保存：⌘S\n截图与录屏需在系统设置中允许屏幕录制。"));text.font = .systemFont(ofSize:13);text.preferredMaxLayoutWidth=292
         root.addArrangedSubview(title);root.addArrangedSubview(text)
         let ok=NSButton(title:L("好"),target:self,action:#selector(dismissAbout));ok.bezelStyle = .rounded;ok.keyEquivalent="\r";root.addArrangedSubview(ok)

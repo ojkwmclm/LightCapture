@@ -242,7 +242,9 @@ extension App {
         guard alert.runModal() == .alertFirstButtonReturn else{return}
         guard CGPreflightPostEventAccess() else {
             _=CGRequestPostEventAccess()
-            message(L("需要设备控制权限"),L("请在「系统设置 → 隐私与安全 → 设备控制和数据访问」中允许轻截，再重新发起滚动截图。\n部分系统将此选项称为「辅助功能」。"),keepOnTop:true);return
+            message(L("需要设备控制权限"),L("请在「系统设置 → 隐私与安全 → 设备控制和数据访问」中允许轻截，再重新发起滚动截图。\n部分系统将此选项称为「辅助功能」。"),keepOnTop:true)
+            NSWorkspace.shared.open(URL(string:"x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+            return
         }
         let previous=screenshotSurface
         capturing=true;window.orderOut(nil);panel.orderOut(nil)

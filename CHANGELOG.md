@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.6.41 (local build)
+
+- Open System Settings directly to Device Control & Data Access (Accessibility on older systems) after dismissing the scrolling-capture permission reminder with OK.
+
 ## v0.6.40 (local build)
 
 - Copy and paste selected annotations as editable objects in the focused editor, preserving style and offsetting pasted copies. Toolbar Copy/Paste follows the same context.
