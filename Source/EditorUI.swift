@@ -81,7 +81,7 @@ extension App {
     func canEditorImageShortcut(_ key:String,to pasteboard:NSPasteboard = .general)->Bool {
         guard !capturing,!recordingBusy,NSApp.modalWindow==nil else{return false}
         switch key {
-        case "v":return NSImage.canInit(with:pasteboard)
+        case "v":return (canvas.image != nil && MarkClipboard.decode(pasteboard.data(forType:MarkClipboard.type)) != nil) || NSImage.canInit(with:pasteboard)
         case "a":return canvas.image != nil
         case "c":return canvas.image != nil
         default:return false
@@ -90,18 +90,35 @@ extension App {
     @discardableResult func editorImageShortcut(_ key:String,to pasteboard:NSPasteboard = .general)->Bool {
         guard canEditorImageShortcut(key,to:pasteboard) else{return false}
         switch key {
-        case "v":return importImage(from:pasteboard)
+        case "v":
+            if let mark=MarkClipboard.decode(pasteboard.data(forType:MarkClipboard.type)),canvas.image != nil {
+                let identity=pasteboard.name.rawValue+":"+String(pasteboard.changeCount)
+                if annotationPasteIdentity != identity {annotationPasteIdentity=identity;annotationPasteCount=0}
+                annotationPasteCount+=1
+                let result=canvas.pasteMark(mark,offset:CGFloat(min(annotationPasteCount,20)*16))
+                window.makeFirstResponder(canvas);return result
+            }
+            return importImage(from:pasteboard)
         case "a":canvas.selectWholeImage();window.makeFirstResponder(canvas);return true
         case "c":
+            if let mark=canvas.selectedMark,let data=MarkClipboard.encode(mark) {
+                pasteboard.clearContents();let result=pasteboard.setData(data,forType:MarkClipboard.type)
+                if pasteboard.name==NSPasteboard.general.name {refreshClipboardAvailability(force:true)}
+                return result
+            }
             guard let png=canvas.imageData() else{return false}
             pasteboard.clearContents();return pasteboard.setData(png,forType:.png)
         default:return false
         }
     }
+    @objc func copyEditorContent(){_=editorImageShortcut("c")}
+    @objc func pasteEditorContent(){_=editorImageShortcut("v")}
     func commandHint(_ action:Selector,_ title:String)->String {
         switch action {
         case #selector(openImage):return L("打开图片 · ⌘O")
         case #selector(saveImage):return L("保存图片为 PNG、JPEG 或 PDF · ⌘S")
+        case #selector(copyEditorContent):return L("复制选中标注或整张图片 · ⌘C")
+        case #selector(pasteEditorContent):return L("粘贴标注或图片 · ⌘V")
         case #selector(copyImage):return L("复制带标注的图片 · ⇧⌘C")
         case #selector(importClipboardImage):return L("从剪贴板导入 · ⌥⌘V")
         case #selector(undoEdit):return L("撤销上一次编辑 · ⌘Z")
@@ -134,11 +151,11 @@ extension App {
         editorUndo=command(L("撤销"),"arrow.uturn.backward",#selector(undoEdit));editorRedo=command(L("重做"),"arrow.uturn.forward",#selector(redoEdit))
         editorRotate=command(L("旋转"),"rotate.right",#selector(rotateImage))
         recordButton=command(L("录屏"),"video",#selector(toggleRecording))
-        editorPasteButton=command(L("粘贴"),"clipboard",#selector(importClipboardImage))
+        editorPasteButton=command(L("粘贴"),"clipboard",#selector(pasteEditorContent))
         refreshClipboardAvailability(force:true)
         let capture=NSPopUpButton(frame:.zero,pullsDown:true);capture.addItem(withTitle:L("截图"));capture.bezelStyle = .rounded;capture.toolTip=L("截图：选择区域、窗口或全屏捕获")
         capture.menu?.addItem(menuItem(L("区域截图"),#selector(region)));capture.menu?.addItem(menuItem(L("窗口截图"),#selector(captureWindow)));capture.menu?.addItem(menuItem(L("全屏截图"),#selector(full)));capture.menu?.addItem(menuItem(L("滚动截图"),#selector(scrollingCapture)));capture.menu?.addItem(menuItem(L("显示快速捕获栏"),#selector(showPanel)))
-        let toolbar=NSStackView(views:[command(L("打开"),"folder",#selector(openImage)),command(L("保存"),"square.and.arrow.down",#selector(saveImage)),command(L("复制"),"doc.on.doc",#selector(copyImage)),editorPasteButton!,divider(),editorUndo!,editorRedo!,divider(),command(L("裁剪"),"crop",#selector(selectCrop)),editorRotate!,command(L("绘图"),"pencil.tip",#selector(toggleDrawing)),divider(),command(L("放大"),"plus.magnifyingglass",#selector(zoomIn)),command(L("缩小"),"minus.magnifyingglass",#selector(zoomOut)),command(L("适合"),"arrow.up.left.and.arrow.down.right",#selector(zoomFit)),command(L("原大"),"1.magnifyingglass",#selector(zoomActual)),divider(),command(L("文字识别"),"text.viewfinder",#selector(ocr)),command(L("贴图"),"pin",#selector(pin)),command(L("拼接"),"rectangle.stack",#selector(combine)),divider(),capture,recordButton!]);toolbar.spacing=3;toolbar.alignment = .centerY;toolbar.edgeInsets=NSEdgeInsets(top:8,left:8,bottom:8,right:8)
+        let toolbar=NSStackView(views:[command(L("打开"),"folder",#selector(openImage)),command(L("保存"),"square.and.arrow.down",#selector(saveImage)),command(L("复制"),"doc.on.doc",#selector(copyEditorContent)),editorPasteButton!,divider(),editorUndo!,editorRedo!,divider(),command(L("裁剪"),"crop",#selector(selectCrop)),editorRotate!,command(L("绘图"),"pencil.tip",#selector(toggleDrawing)),divider(),command(L("放大"),"plus.magnifyingglass",#selector(zoomIn)),command(L("缩小"),"minus.magnifyingglass",#selector(zoomOut)),command(L("适合"),"arrow.up.left.and.arrow.down.right",#selector(zoomFit)),command(L("原大"),"1.magnifyingglass",#selector(zoomActual)),divider(),command(L("文字识别"),"text.viewfinder",#selector(ocr)),command(L("贴图"),"pin",#selector(pin)),command(L("拼接"),"rectangle.stack",#selector(combine)),divider(),capture,recordButton!]);toolbar.spacing=3;toolbar.alignment = .centerY;toolbar.edgeInsets=NSEdgeInsets(top:8,left:8,bottom:8,right:8)
         root.addArrangedSubview(toolbar)
         let line=NSBox();line.boxType = .separator;root.addArrangedSubview(line)
         editorSidebar=NSStackView();editorSidebar.orientation = .vertical;editorSidebar.alignment = .leading;editorSidebar.spacing=12;editorSidebar.edgeInsets=NSEdgeInsets(top:16,left:12,bottom:12,right:12);editorSidebar.widthAnchor.constraint(equalToConstant:Localizer.isEnglish ? 210:174).isActive=true

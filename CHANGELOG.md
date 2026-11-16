@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.6.40 (local build)
+
+- Copy and paste selected annotations as editable objects in the focused editor, preserving style and offsetting pasted copies. Toolbar Copy/Paste follows the same context.
+- Command-A selects the whole image and clears annotation selection; Command-C then copies the complete annotated image. Text input retains its standard shortcuts.
+
 ## v0.6.39 (local build)
 
 - Capture the focused application window directly without opening the window picker. Use focused-window accessibility bounds when permission already exists, otherwise frontmost application window order.

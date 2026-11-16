@@ -100,6 +100,8 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
     var quickRecordButton:NSButton!
     var clipboardButton:NSButton?
     var editorPasteButton:NSButton?
+    var annotationPasteIdentity=""
+    var annotationPasteCount=0
     var clipboardTimer:Timer?
     var screenObserver:NSObjectProtocol?
     var instanceObserver:NSObjectProtocol?
@@ -344,7 +346,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
             clipboardChangeCount=pb.changeCount;clipboardContainsImage=NSImage.canInit(with:pb)
         }
         let enabled=clipboardContainsImage && !capturing && !recordingBusy && NSApp.modalWindow == nil
-        clipboardButton?.isEnabled=enabled;editorPasteButton?.isEnabled=enabled
+        clipboardButton?.isEnabled=enabled;editorPasteButton?.isEnabled=canEditorImageShortcut("v")
     }
     @discardableResult func importImage(from pasteboard:NSPasteboard)->Bool {
         guard NSImage.canInit(with:pasteboard),let source=NSImage(pasteboard:pasteboard),let image=normalized(source) else{return false}
@@ -453,7 +455,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         let icon=NSImageView();icon.image=NSApp.applicationIconImage;icon.imageScaling = .scaleProportionallyUpOrDown;icon.setAccessibilityLabel(L("轻截"))
         NSLayoutConstraint.activate([icon.widthAnchor.constraint(equalToConstant:64),icon.heightAnchor.constraint(equalToConstant:64)])
         root.addArrangedSubview(icon)
-        let title=NSTextField(labelWithString:L("轻截 LightCapture 0.6.39"));title.font = .systemFont(ofSize:15,weight:.bold)
+        let title=NSTextField(labelWithString:L("轻截 LightCapture 0.6.40"));title.font = .systemFont(ofSize:15,weight:.bold)
         let text=NSTextField(wrappingLabelWithString:L("区域／窗口／全屏：⌥⌘2／4／3\n图片复制：⇧⌘C；保存：⌘S\n截图与录屏需在系统设置中允许屏幕录制。"));text.font = .systemFont(ofSize:13);text.preferredMaxLayoutWidth=292
         root.addArrangedSubview(title);root.addArrangedSubview(text)
         let ok=NSButton(title:L("好"),target:self,action:#selector(dismissAbout));ok.bezelStyle = .rounded;ok.keyEquivalent="\r";root.addArrangedSubview(ok)
@@ -650,6 +652,42 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         canvas.image=nil;assert(!canEditorImageShortcut("a",to:pb) && !canEditorImageShortcut("c",to:pb))
         canvas.image=original
     }
+    func testAnnotationClipboard(){
+        let pb=NSPasteboard.withUniqueName();defer{pb.releaseGlobally()}
+        let editor=window as! ImageEditorWindow
+        let originalHandler=editor.shortcut
+        defer{editor.shortcut=originalHandler}
+        editor.shortcut={self.editorImageShortcut($0,to:pb)}
+        let image=NSImage(size:NSSize(width:800,height:500));image.lockFocus();NSColor.white.setFill();NSRect(x:0,y:0,width:800,height:500).fill();image.unlockFocus()
+        canvas.setImage(image);showEditor();window.makeFirstResponder(canvas)
+        func key(_ value:String)->Bool {
+            editor.performKeyEquivalent(with:NSEvent.keyEvent(with:.keyDown,location:.zero,modifierFlags:.command,timestamp:0,windowNumber:editor.windowNumber,context:nil,characters:value,charactersIgnoringModifiers:value,isARepeat:false,keyCode:0)!)
+        }
+        for tool in [Tool.arrow,.box,.oval,.pen,.highlight,.text,.step,.redact] {
+            canvas.setImage(image)
+            let source=Mark(tool:tool,points:[NSPoint(x:100,y:100),NSPoint(x:200,y:180)],color:NSColor(srgbRed:0.9,green:0.1,blue:0.2,alpha:0.7),width:4,text:"测试 Copy 7")
+            canvas.marks=[source];canvas.selectMark(0)
+            let base=canvas.imageData()!
+            assert(key("c") && pb.data(forType:MarkClipboard.type) != nil && pb.data(forType:.png)==nil)
+            assert(canEditorImageShortcut("v",to:pb) && key("v"))
+            assert(canvas.image === image && canvas.marks.count==2 && canvas.selectedIndex==1 && canvas.history.count==1)
+            let pasted=canvas.selectedMark!
+            assert(pasted.tool==tool && pasted.text==source.text && pasted.width==source.width)
+            assert(pasted.points==source.points.map{NSPoint(x:$0.x+16,y:$0.y+16)})
+            let color=pasted.color.usingColorSpace(.sRGB)!
+            assert(abs(color.redComponent-0.9)<0.001 && abs(color.alphaComponent-0.7)<0.001)
+            assert(key("v") && canvas.marks.count==3 && canvas.selectedMark!.points[0]==NSPoint(x:132,y:132))
+            canvas.undoEdit();assert(canvas.marks.count==2);canvas.undoEdit();assert(canvas.marks.count==1 && canvas.imageData()==base)
+            canvas.redoEdit();assert(canvas.marks.count==2)
+            canvas.selectMark(1);assert(key("a") && canvas.imageSelected && canvas.selectedMark==nil)
+            let entire=canvas.imageData()!
+            assert(key("c") && pb.data(forType:.png)==entire && pb.data(forType:MarkClipboard.type)==nil)
+        }
+        pb.clearContents();pb.setData(Data("invalid".utf8),forType:MarkClipboard.type)
+        let count=canvas.marks.count;assert(!canEditorImageShortcut("v",to:pb) && !editorImageShortcut("v",to:pb) && canvas.marks.count==count)
+        pb.clearContents();pb.setData(MarkClipboard.encode(Mark(tool:.box,points:[.zero,NSPoint(x:100,y:100)],color:.red,width:4))!,forType:MarkClipboard.type)
+        canvas.image=nil;assert(!canEditorImageShortcut("v",to:pb));canvas.image=image
+    }
     func testScreenshotClipboard(){
         let pb=NSPasteboard.withUniqueName();defer{pb.releaseGlobally()}
         precondition(pb.name != NSPasteboard.general.name)
@@ -683,7 +721,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         prefs.set(["x":"invalid","y":2],forKey:PanelPlacement.key)
         assert(PanelPlacement.restore(size:size,screens:[screen],fallback:fallback,defaults:prefs)==fallback)
     }
-    func selfTest(){DispatchQueue.main.asyncAfter(deadline:.now()+0.4){self.testEditableObjects();self.testRegionCancellation();self.testRegionOverlayCoordinates();self.testWindowCancellation();self.testFocusedWindowTarget();self.testSelectionMouseSurface();self.testClipboardImport();self.testEditorImageShortcuts();self.testScreenshotClipboard();self.testPanelPlacement();testInstanceLock();testCanvasEdges();testImageRotation();testRotationAdjustment();testScrollStitcher();let image=NSImage(size:NSSize(width:800,height:500));image.lockFocusFlipped(true);NSColor.white.setFill();NSRect(x:0,y:0,width:800,height:500).fill();"LightCapture 轻截".draw(at:NSPoint(x:60,y:50),withAttributes:[.font:NSFont.systemFont(ofSize:40),.foregroundColor:NSColor.black]);NSColor.systemBlue.setFill();NSRect(x:80,y:180,width:240,height:130).fill();image.unlockFocus();self.canvas.setImage(self.normalized(image)!);self.canvas.checkpoint();self.canvas.marks=[Mark(tool:.arrow,points:[NSPoint(x:500,y:120),NSPoint(x:310,y:230)],color:.systemRed,width:5),Mark(tool:.redact,points:[NSPoint(x:440,y:300),NSPoint(x:650,y:350)],color:.black,width:4),Mark(tool:.text,points:[NSPoint(x:400,y:380)],color:.systemRed,width:4,text:"本机处理 / Local only")];let path=ProcessInfo.processInfo.environment["LIGHTCAPTURE_TEST_OUTPUT"] ?? "/tmp/lightcapture-selftest.png";try? self.canvas.imageData()?.write(to:URL(fileURLWithPath:path));self.canvas.undoEdit();assert(self.canvas.marks.isEmpty);self.canvas.redoEdit();assert(self.canvas.marks.count==3);self.statusLabel.stringValue="自检通过：绘制、导出、撤销、重做";let data=self.canvas.imageData()!
+    func selfTest(){DispatchQueue.main.asyncAfter(deadline:.now()+0.4){self.testEditableObjects();self.testRegionCancellation();self.testRegionOverlayCoordinates();self.testWindowCancellation();self.testFocusedWindowTarget();self.testSelectionMouseSurface();self.testClipboardImport();self.testEditorImageShortcuts();self.testAnnotationClipboard();self.testScreenshotClipboard();self.testPanelPlacement();testInstanceLock();testCanvasEdges();testImageRotation();testRotationAdjustment();testScrollStitcher();let image=NSImage(size:NSSize(width:800,height:500));image.lockFocusFlipped(true);NSColor.white.setFill();NSRect(x:0,y:0,width:800,height:500).fill();"LightCapture 轻截".draw(at:NSPoint(x:60,y:50),withAttributes:[.font:NSFont.systemFont(ofSize:40),.foregroundColor:NSColor.black]);NSColor.systemBlue.setFill();NSRect(x:80,y:180,width:240,height:130).fill();image.unlockFocus();self.canvas.setImage(self.normalized(image)!);self.canvas.checkpoint();self.canvas.marks=[Mark(tool:.arrow,points:[NSPoint(x:500,y:120),NSPoint(x:310,y:230)],color:.systemRed,width:5),Mark(tool:.redact,points:[NSPoint(x:440,y:300),NSPoint(x:650,y:350)],color:.black,width:4),Mark(tool:.text,points:[NSPoint(x:400,y:380)],color:.systemRed,width:4,text:"本机处理 / Local only")];let path=ProcessInfo.processInfo.environment["LIGHTCAPTURE_TEST_OUTPUT"] ?? "/tmp/lightcapture-selftest.png";try? self.canvas.imageData()?.write(to:URL(fileURLWithPath:path));self.canvas.undoEdit();assert(self.canvas.marks.isEmpty);self.canvas.redoEdit();assert(self.canvas.marks.count==3);self.statusLabel.stringValue="自检通过：绘制、导出、撤销、重做";let data=self.canvas.imageData()!
         let bitmap=NSBitmapImageRep(data:data)!
         assert(bitmap.pixelsWide==Int(self.canvas.image!.size.width))
         let black=bitmap.colorAt(x:450,y:320)!.usingColorSpace(.deviceRGB)!
@@ -700,7 +738,7 @@ final class App: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemVa
         try? VNImageRequestHandler(cgImage:bitmap.cgImage!).perform([request])
         let recognized=request.results?.compactMap{$0.topCandidates(1).first?.string}.joined(separator:"\n") ?? ""
         assert(recognized.contains("LightCapture"))
-        let result:[String:Any]=["status":"PASS","png_dimensions":[bitmap.pixelsWide,bitmap.pixelsHigh],"checks":["focused editor Command-V A C route through isolated pasteboard","Command-C copies without selection and rejects empty canvas","text focus and inactive editor do not invoke image shortcuts","whole-image selection stays out of export and non-image paste is ignored","focused window target ignores capture bar and respects frontmost app and editor","PNG export","JPEG export","opaque redaction pixels","undo","redo","zoom preserves export dimensions","rotation 90 180 270 pixel direction and undo annotations","rotation all integer angles 1 to 359 and white corners","rotation 360 no-op invalid angles and image-size limit","rotation fractional signed angle preview validation and custom background","rotation auto crop geometry and corner pixels","eight canvas edges crop and expand at three zoom levels","canvas resize preserves source pixels and fills white","canvas resize undo restores annotations and redo","canvas resize Escape and right-click cancellation and size limits","pointer zoom anchors across fit and scroll transitions","pointer zoom limits and unchanged export or annotations","Vision OCR","annotation hit testing","object move","arrow endpoint editing","four shape resize types","selection excluded from export","style editing","delete and undo/redo","pen text step movement","right click/drag/release cancel without capture","left drag confirms region","Escape cancels region","multi-display capture coordinates","per-display overlay coordinates for cross-screen and negative origins","window right-click cancellation","left click confirms selected window","frontmost window hit testing","window selected area retains nonzero alpha","region selected area retains nonzero alpha","empty and text clipboard rejected without replacing image","PNG and TIFF clipboard import preserves pixel dimensions","clipboard import opens editor and hides quick bar","clipboard tests do not modify system clipboard","screenshot copies PNG, shows quick bar only, and preserves clipboard on cancellation","single-instance lock excludes a second process and releases for restart","quick panel position persists across defaults instances","offscreen panel is constrained to a visible display","negative-coordinate display placement","invalid position falls back safely","scroll stitch exact overlap and partial final step","scroll stitch pixel-exact output","scroll unchanged and incompatible frames rejected","scroll unrelated content rejected"],"quick_panel_origin":[self.panel.frame.minX,self.panel.frame.minY],"ocr":recognized]
+        let result:[String:Any]=["status":"PASS","png_dimensions":[bitmap.pixelsWide,bitmap.pixelsHigh],"checks":["selected annotation copy paste keeps eight mark types editable with offset and undo redo","Command-A overrides annotation selection and copies full PNG; malformed annotation and empty canvas paste rejected","focused editor Command-V A C route through isolated pasteboard","Command-C copies without selection and rejects empty canvas","text focus and inactive editor do not invoke image shortcuts","whole-image selection stays out of export and non-image paste is ignored","focused window target ignores capture bar and respects frontmost app and editor","PNG export","JPEG export","opaque redaction pixels","undo","redo","zoom preserves export dimensions","rotation 90 180 270 pixel direction and undo annotations","rotation all integer angles 1 to 359 and white corners","rotation 360 no-op invalid angles and image-size limit","rotation fractional signed angle preview validation and custom background","rotation auto crop geometry and corner pixels","eight canvas edges crop and expand at three zoom levels","canvas resize preserves source pixels and fills white","canvas resize undo restores annotations and redo","canvas resize Escape and right-click cancellation and size limits","pointer zoom anchors across fit and scroll transitions","pointer zoom limits and unchanged export or annotations","Vision OCR","annotation hit testing","object move","arrow endpoint editing","four shape resize types","selection excluded from export","style editing","delete and undo/redo","pen text step movement","right click/drag/release cancel without capture","left drag confirms region","Escape cancels region","multi-display capture coordinates","per-display overlay coordinates for cross-screen and negative origins","window right-click cancellation","left click confirms selected window","frontmost window hit testing","window selected area retains nonzero alpha","region selected area retains nonzero alpha","empty and text clipboard rejected without replacing image","PNG and TIFF clipboard import preserves pixel dimensions","clipboard import opens editor and hides quick bar","clipboard tests do not modify system clipboard","screenshot copies PNG, shows quick bar only, and preserves clipboard on cancellation","single-instance lock excludes a second process and releases for restart","quick panel position persists across defaults instances","offscreen panel is constrained to a visible display","negative-coordinate display placement","invalid position falls back safely","scroll stitch exact overlap and partial final step","scroll stitch pixel-exact output","scroll unchanged and incompatible frames rejected","scroll unrelated content rejected"],"quick_panel_origin":[self.panel.frame.minX,self.panel.frame.minY],"ocr":recognized]
         let report=try! JSONSerialization.data(withJSONObject:result,options:[.prettyPrinted,.sortedKeys])
         try! report.write(to:URL(fileURLWithPath:path+".json"))
         if CommandLine.arguments.contains("--test-exit") {NSApp.terminate(nil)}}}

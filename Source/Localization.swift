@@ -11,6 +11,8 @@ enum Localizer {
         }
     }
     static let english: [String:String] = [
+        "复制选中标注或整张图片 · ⌘C":"Copy selected annotation or whole image · ⌘C",
+        "粘贴标注或图片 · ⌘V":"Paste annotation or image · ⌘V",
         "当前应用没有可截图的窗口。":"The current application has no window available to capture.",
         "无法将截图复制到剪贴板。":"Unable to copy the screenshot to the clipboard.",
         "任意角度旋转":"Rotate by Any Angle",
@@ -227,7 +229,7 @@ enum Localizer {
         "请选择视频文件保存位置":"Choose where to save the video",
         "贴图":"Pin",
         "轻截":"LightCapture",
-        "轻截 LightCapture 0.6.39":"LightCapture 0.6.39",
+        "轻截 LightCapture 0.6.40":"LightCapture 0.6.40",
         "轻截 · 参考贴图":"LightCapture · Pinned Image",
         "轻截 · 图片编辑器":"LightCapture · Image Editor",
         "轻截 · 屏幕录制":"LightCapture · Screen Recording",

@@ -19,6 +19,29 @@ extension Tool {
     }
 }
 struct Mark { var tool: Tool; var points: [NSPoint]; var color: NSColor; var width: CGFloat; var text: String = "" }
+enum MarkClipboard {
+    static let type=NSPasteboard.PasteboardType("local.lightcapture.annotation.v1")
+    private struct Payload:Codable {
+        let tool:String
+        let points:[[Double]]
+        let color:[Double]
+        let width:Double
+        let text:String
+    }
+    static func encode(_ mark:Mark)->Data? {
+        guard let color=mark.color.usingColorSpace(.sRGB) else{return nil}
+        return try? JSONEncoder().encode(Payload(tool:mark.tool.rawValue,points:mark.points.map{[Double($0.x),Double($0.y)]},color:[Double(color.redComponent),Double(color.greenComponent),Double(color.blueComponent),Double(color.alphaComponent)],width:Double(mark.width),text:mark.text))
+    }
+    static func decode(_ data:Data?)->Mark? {
+        guard let data,data.count<=8_000_000,let value=try? JSONDecoder().decode(Payload.self,from:data),
+              let tool=Tool(rawValue:value.tool),tool != .select,tool != .crop,
+              !value.points.isEmpty,value.points.count<=100_000,
+              value.points.allSatisfy({$0.count==2 && $0.allSatisfy{$0.isFinite && abs($0)<=1_000_000}}),
+              value.color.count==4,value.color.allSatisfy({$0.isFinite && $0>=0 && $0<=1}),
+              value.width.isFinite,value.width>0,value.width<=1000 else{return nil}
+        return Mark(tool:tool,points:value.points.map{NSPoint(x:$0[0],y:$0[1])},color:NSColor(srgbRed:value.color[0],green:value.color[1],blue:value.color[2],alpha:value.color[3]),width:value.width,text:value.text)
+    }
+}
 struct Snapshot { var image: NSImage; var marks: [Mark] }
 // Top-left pixel coordinates: corners and edge midpoints, clockwise.
 enum CanvasEdge:Int,CaseIterable {
@@ -208,6 +231,16 @@ final class Canvas: NSView {
         if event.keyCode == 51 || event.keyCode == 117 {deleteSelection()}
         else if event.keyCode == 53 {clearSelection();draft=nil;changed?()}
         else {super.keyDown(with:event)}
+    }
+    @discardableResult func pasteMark(_ value:Mark,offset:CGFloat)->Bool {
+        guard let image else{return false}
+        var mark=value
+        let bounds=markBounds(mark)
+        let dx=max(-bounds.minX,min(offset,image.size.width-bounds.maxX))
+        let dy=max(-bounds.minY,min(offset,image.size.height-bounds.maxY))
+        mark.points=mark.points.map{NSPoint(x:$0.x+dx,y:$0.y+dy)}
+        checkpoint();clearSelection();draft=nil;marks.append(mark);selectMark(marks.count-1)
+        return true
     }
     func selectWholeImage(){guard image != nil else{return};clearSelection();draft=nil;imageSelected=true;needsDisplay=true}
     func drawSelection() {
